@@ -73,6 +73,7 @@
                 <li><strong>Ban-evasion detection</strong> — if a code is indexed, <em>every</em> Discord account ever linked to it is banned on sight.</li>
                 <li><strong>Opt-out</strong> — members who genuinely don't play Among Us can say so instead of verifying.</li>
                 <li><strong>Reminder DMs</strong> — a friendly nudge at the start, halfway point, and final deadline.</li>
+                <li><strong>Self-monitoring</strong> — the bot writes a heartbeat every minute, and an external watchdog alerts moderators if it dies or its event loop stops responding.</li>
               </ul>
             </fieldset>
 
@@ -135,6 +136,8 @@
                   <tr><td><code>/blacklist remove</code></td><td>Moderator</td><td>Remove an index entry.</td></tr>
                   <tr><td><code>/blacklist list</code></td><td>Moderator</td><td>Show recent index entries (codes masked).</td></tr>
                   <tr><td><code>/nuke</code></td><td>Moderator</td><td>Ban now and index every code linked to a member.</td></tr>
+                  <tr><td><code>/ping</code></td><td>Anyone</td><td>Gateway latency and uptime.</td></tr>
+                  <tr><td><code>/stats</code></td><td>Moderator</td><td>Gate, index, and report counters plus the last audit event.</td></tr>
                   <tr><td><code>/setup</code></td><td>Admin</td><td>Interactive menu to set channels, roles, and options.</td></tr>
                   <tr><td><code>/gate-lock</code></td><td>Admin</td><td>Re-apply the channel lockdown for unverified members.</td></tr>
                 </tbody>

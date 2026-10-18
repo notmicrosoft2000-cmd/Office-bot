@@ -49,7 +49,12 @@ class Help(commands.Cog):
             inline=False,
         )
         embed.add_field(
-            name="7) Honest limitations",
+            name="7) Staying online",
+            value=f"Use `/ping` for gateway latency and `/stats` for gate/index/report counters. The bot also writes a heartbeat file every minute so an external watchdog can tell a hung process apart from a healthy one.",
+            inline=False,
+        )
+        embed.add_field(
+            name="8) Honest limitations",
             value="No official Among Us API, so we can't prove ownership — we validate format and record the claim. Treat evidence carefully; mod approval is the safeguard.",
             inline=False,
         )

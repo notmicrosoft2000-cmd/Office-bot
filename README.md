@@ -49,6 +49,8 @@ useful ban-evasion tripwire.
 | `/blacklist list` | Mod | Show recent index entries (codes masked) |
 | `/whois` | Mod | A user's status, all linked codes, and index hits |
 | `/nuke` | Mod | Ban now + index every code linked to the user (caught liars) |
+| `/ping` | Anyone | Gateway latency, uptime, guild count |
+| `/stats` | Mod | Gate / index / report counters + last audit event |
 | `/help` | Anyone | Explains how the bot works |
 
 ## Architecture
@@ -61,6 +63,8 @@ helpers.py        settings lookup, role resolution, masking, audit posting
 cogs/gate.py      join event, gate view/modal, non-AU button, timeout kick task
 cogs/reports.py   /report modal, mod review buttons, blacklist-on-approve
 cogs/moderation.py /blacklist, /whois, /nuke
+cogs/info.py      /ping, /stats, the heartbeat file the watchdog watches
+deploy/           systemd units + deploy/watchdog.py
 tests/smoke.py    DB + command-registration tests (no token needed)
 ```
 
@@ -115,6 +119,43 @@ tests/smoke.py    DB + command-registration tests (no token needed)
 | `LIE_PUNISHMENT` | `ban` | `ban` / `flag` / `off` |
 | `FC_PATTERN` | `^[A-Za-z]{2,16}#[0-9]{4}$` | Override if Innersloth changes the format |
 | `LOG_LEVEL` | `INFO` | |
+
+## Monitoring & watchdog
+
+`systemctl --user restart` only helps when the process *exits*. A bot whose
+event loop has wedged stays "active" forever and looks healthy, so `cogs/info.py`
+also rewrites a heartbeat file (`data/heartbeat`, next to the database) every
+minute. `deploy/watchdog.py` runs from `deploy/au-verify-watchdog.timer` every 5
+minutes and reports the bot as down when either
+
+- `systemctl --user is-active au-verify` is not `active`, or
+- the heartbeat file is older than `WATCHDOG_STALE_SECONDS` (default 600).
+
+It messages only on a state **change**, so one outage produces exactly one "looks
+down" message and one "back up" message with the downtime. It is standard-library
+only and runs on the system Python, so it keeps working even when the bot's
+virtualenv is broken. The first run records the current state without announcing
+anything, so a fresh install can't fire a false alarm.
+
+Alerts go to `WATCHDOG_WEBHOOK_URL` if it is set — a channel webhook survives a
+rotated bot token — otherwise to the log/report channel stored in the database
+using the bot token, and if neither works the failure lands in the journal.
+
+Install the timer on the server (the units read the same `.env`):
+
+```bash
+cp deploy/au-verify-watchdog.service deploy/au-verify-watchdog.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now au-verify-watchdog.timer
+systemctl --user list-timers au-verify-watchdog.timer   # should show a next run
+```
+
+| Env var | Default | Notes |
+| --- | --- | --- |
+| `WATCHDOG_SERVICE` | `au-verify` | systemd unit to check |
+| `WATCHDOG_STALE_SECONDS` | `600` | Heartbeat older than this counts as down |
+| `WATCHDOG_WEBHOOK_URL` | — | Preferred alert target (a channel webhook) |
+| `WATCHDOG_RESTART` | `0` | `1` restarts the unit when it looks down |
 
 ## Policies & GitHub Pages
 

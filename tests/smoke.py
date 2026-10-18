@@ -104,6 +104,18 @@ async def db_tests() -> None:
     check("resolved reports are immutable", (await db.report_get(rid))["status"] == "approved")
 
     await db.audit("TEST", "hello", 7)
+    s = await db.stats()
+    check("stats index_total", s["index_total"] == 1)
+    check("stats index codes", s["index_codes"] == 1)
+    check("stats index accounts", s["index_accounts"] == 0)
+    check("stats reports approved", s["reports_approved"] == 1)
+    check("stats reports pending is zero", s["reports_pending"] == 0)
+    check("stats member keys present", {
+        "members_unverified", "members_verified", "members_nonau", "members_banned",
+    } <= set(s))
+    check("stats counters non-negative", all(v >= 0 for v in s.values()))
+    last = await db.last_audit()
+    check("last_audit returns the latest entry", last and last["action"] == "TEST")
     await db.close()
     check("db closes cleanly", True)
 
@@ -117,7 +129,14 @@ async def cog_tests() -> None:
     bot = AUVerifyBot()
     await bot.db.connect()
     loaded, errors = [], []
-    for ext in ("cogs.gate", "cogs.setup", "cogs.reports", "cogs.moderation", "cogs.help"):
+    for ext in (
+        "cogs.gate",
+        "cogs.setup",
+        "cogs.reports",
+        "cogs.moderation",
+        "cogs.help",
+        "cogs.info",
+    ):
         try:
             await bot.load_extension(ext)
             loaded.append(ext)
@@ -139,6 +158,8 @@ async def cog_tests() -> None:
         "nuke",
         "blacklist",
         "help",
+        "ping",
+        "stats",
     ):
         check(f"command registered: {expected}", expected in names)
 

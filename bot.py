@@ -21,6 +21,7 @@ COGS = (
     "cogs.reports",
     "cogs.moderation",
     "cogs.help",
+    "cogs.info",
 )
 
 

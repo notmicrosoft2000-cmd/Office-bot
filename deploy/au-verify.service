@@ -9,7 +9,7 @@ User=nept
 WorkingDirectory=/home/nept/au-verify
 EnvironmentFile=/home/nept/au-verify/.env
 ExecStart=/home/nept/au-verify/.venv/bin/python bot.py
-Restart=on-failure
+Restart=always
 RestartSec=5
 # Basic hardening
 NoNewPrivileges=true

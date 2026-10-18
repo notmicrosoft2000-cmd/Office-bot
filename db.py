@@ -366,3 +366,41 @@ class Database:
             (action, details, actor_id),
         )
         await self.db.commit()
+
+    async def last_audit(self) -> dict[str, Any] | None:
+        """Most recent audit entry, for /stats."""
+        cur = await self.db.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 1")
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def stats(self) -> dict[str, int]:
+        """Counter snapshot for /stats: members, codes, index, reports."""
+        out: dict[str, int] = {}
+
+        cur = await self.db.execute(
+            "SELECT status, COUNT(*) AS n FROM members GROUP BY status"
+        )
+        for row in await cur.fetchall():
+            out[f"members_{row['status']}"] = int(row["n"])
+        out.setdefault("members_unverified", 0)
+        out.setdefault("members_verified", 0)
+        out.setdefault("members_nonau", 0)
+        out.setdefault("members_banned", 0)
+
+        counters = {
+            "members_total": "SELECT COUNT(*) AS n FROM members",
+            "codes": "SELECT COUNT(*) AS n FROM members WHERE friend_code IS NOT NULL",
+            "links": "SELECT COUNT(*) AS n FROM code_links",
+            "index_total": "SELECT COUNT(*) AS n FROM blacklist",
+            "index_codes": "SELECT COUNT(*) AS n FROM blacklist WHERE kind='friend_code'",
+            "index_accounts": "SELECT COUNT(*) AS n FROM blacklist WHERE kind='discord_id'",
+            "reports_pending": "SELECT COUNT(*) AS n FROM reports WHERE status='pending'",
+            "reports_approved": "SELECT COUNT(*) AS n FROM reports WHERE status='approved'",
+            "reports_rejected": "SELECT COUNT(*) AS n FROM reports WHERE status='rejected'",
+            "audit_entries": "SELECT COUNT(*) AS n FROM audit_log",
+        }
+        for key, sql in counters.items():
+            cur = await self.db.execute(sql)
+            row = await cur.fetchone()
+            out[key] = int(row["n"]) if row else 0
+        return out

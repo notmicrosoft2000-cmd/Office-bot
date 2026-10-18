@@ -55,6 +55,8 @@ Running it does these things in order:
 | `/blacklist add/remove/list` | Mod | Manually manage the index |
 | `/whois` | Mod | See a user's linked codes + index status |
 | `/nuke` | Mod | Ban immediately + index all linked codes |
+| `/ping` | Anyone | Gateway latency + uptime |
+| `/stats` | Mod | Gate / index / report counters and the last audit event |
 
 ## What happens in practice (flows)
 

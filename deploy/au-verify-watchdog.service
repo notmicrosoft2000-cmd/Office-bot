@@ -1,0 +1,12 @@
+[Unit]
+Description=Office Bot watchdog (alerts if the bot is down or hung)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/nept/au-verify
+# '-' makes the file optional; the watchdog still runs without it.
+EnvironmentFile=-/home/nept/au-verify/.env
+ExecStart=/usr/bin/env python3 /home/nept/au-verify/deploy/watchdog.py
+# Standard library only, on purpose: it must work even if the venv is broken.

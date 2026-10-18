@@ -34,8 +34,8 @@ class Help(commands.Cog):
             inline=False,
         )
         embed.add_field(
-            name="4) Reporting system",
-            value="Use `/report` to file a report (category, target user and/or friend code, details, evidence). It goes to `#mod-reports` with **Approve → blacklist** / **Reject** buttons. **Only approved reports enter the index** (this prevents framing).",
+            name="4) Reporting a friend code",
+            value="Use `/report` to report an **Among Us friend code** (`Example#0000`) — pick a reason (predatory behaviour, harassment, ban evasion, …), then describe what happened and attach evidence. It goes to the mod queue with **Approve → blacklist** / **Reject** buttons. **Only approved reports enter the index** (this prevents framing).",
             inline=False,
         )
         embed.add_field(

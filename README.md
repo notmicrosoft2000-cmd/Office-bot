@@ -26,10 +26,12 @@ useful ban-evasion tripwire.
 - **"I don't play Among Us"** — one grey button. It passes the gate, but if a
   member who chose it later submits a code, `LIE_PUNISHMENT` decides what
   happens: `ban` (default), `flag` (verify + loudly notify mods), or `off`.
-- **Mod review queue** — `/report` files a report (category, target user and/or
-  friend code, details, evidence). It lands in the report channel with
-  **Approve → blacklist** / **Reject** buttons. Only approved reports enter the
-  index. Pending reports survive restarts.
+- **Mod review queue** — `/report` reports an Among Us **friend code**
+  (`Example#0000`): pick a reason (predatory behaviour, inappropriate sexual
+  behaviour, harassment, hate speech, scamming, ban evasion, other), then
+  describe what happened and attach evidence. It lands in the report channel
+  with **Approve → blacklist** / **Reject** buttons. Only approved reports enter
+  the index. Pending reports survive restarts.
 - **Audit trail** — every verify, ban, blacklist change and gate kick is written
   to the `audit_log` table and (if configured) posted to the log channel.
 
@@ -40,7 +42,7 @@ useful ban-evasion tripwire.
 | `/setup` | Admin | Interactive menu (channel/role dropdowns + option buttons); `/gate-setup` is an alias |
 | `/gate-lock` | Admin | Re-applies the lockdown (Unverified can only see the verify channel) |
 | `/verify` | Anyone | Re-opens the friend-code modal |
-| `/report` | Anyone | File a report into the mod queue |
+| `/report` | Anyone | Report a friend code (`Example#0000`) + reason into the mod queue |
 | `/codes` | Mod | View every saved friend code (+ linked accounts), or export a CSV |
 | `/blacklist add` | Mod | Index a friend code and/or user + ban them if present |
 | `/blacklist remove` | Mod | Remove an index entry |

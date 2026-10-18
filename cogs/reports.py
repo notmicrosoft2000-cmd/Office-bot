@@ -1,39 +1,73 @@
-"""User reports: /report modal -> moderator approval queue -> blacklist index."""
+"""Friend-code reports: /report -> moderator approval queue -> blacklist index.
+
+Reports target an Among Us **friend code**, not a Discord account. Friend codes
+are permanent and account-bound, so indexing a code is what actually catches a
+bad actor (and every alt they have ever linked).
+"""
 from __future__ import annotations
 
 import logging
+import re
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from helpers import is_mod, load_config, mask_code, send_audit
+from helpers import is_mod, load_config, send_audit
 
 log = logging.getLogger("aubot.reports")
 
-CATEGORIES = [
+# Ordered most-serious first: the whole point of this server is keeping
+# predators and other bad actors out of the lobbies.
+REASONS = [
+    app_commands.Choice(
+        name="Predatory behaviour (grooming / sexual advances)", value="predatory"
+    ),
+    app_commands.Choice(name="Inappropriate sexual behaviour", value="sexual"),
     app_commands.Choice(name="Harassment / bullying", value="harassment"),
     app_commands.Choice(name="Hate speech / slurs", value="hate"),
-    app_commands.Choice(name="Sexual content / predation", value="sexual"),
     app_commands.Choice(name="Scamming / stealing", value="scam"),
-    app_commands.Choice(name="Ban evasion (new account)", value="evasion"),
+    app_commands.Choice(name="Ban evasion (rejoined on another account)", value="evasion"),
     app_commands.Choice(name="Other (explain below)", value="other"),
 ]
 
+REASON_LABELS = {choice.value: choice.name for choice in REASONS}
 
-class ReportModal(discord.ui.Modal, title="Report a user"):
-    def __init__(self, bot: commands.Bot, category: str, target: discord.User | None,
-                 target_code: str | None, reporter_id: int) -> None:
+# Labels for categories stored by older versions of the bot, so pending reports
+# filed before this change still render readably.
+LEGACY_REASON_LABELS = {
+    "harassment": "Harassment / bullying",
+    "hate": "Hate speech / slurs",
+    "sexual": "Inappropriate sexual behaviour",
+    "scam": "Scamming / stealing",
+    "evasion": "Ban evasion (rejoined on another account)",
+    "other": "Other (explain below)",
+}
+
+
+def reason_label(value: str) -> str:
+    """Human-readable label for a stored report category."""
+    return REASON_LABELS.get(value) or LEGACY_REASON_LABELS.get(value, value)
+
+
+def normalize_code(raw: str) -> str:
+    """Canonical form of a friend code: no spaces, uppercase."""
+    return "".join(raw.split()).upper()
+
+
+class ReportModal(discord.ui.Modal, title="Report a friend code"):
+    def __init__(
+        self, bot: commands.Bot, reason: str, target_code: str, reporter_id: int
+    ) -> None:
         super().__init__()
         self.bot = bot
-        self.category = category
-        self.target = target
+        self.reason = reason
         self.target_code = target_code
         self.reporter_id = reporter_id
         self.details = discord.ui.TextInput(
             label="What did they do?",
             style=discord.TextStyle.paragraph,
-            placeholder="Be specific: what happened, when, in which lobby…",
+            placeholder="Be specific: what happened, when, in which lobby — in-game name, too.",
             max_length=1000,
             required=True,
         )
@@ -52,14 +86,15 @@ class ReportModal(discord.ui.Modal, title="Report a user"):
             return
         report_id = await self.bot.db.report_create(
             reporter_id=interaction.user.id,
-            category=self.category,
+            category=self.reason,
             details=str(self.details.value),
-            target_user_id=self.target.id if self.target else None,
+            target_user_id=None,
             target_code=self.target_code,
             evidence=str(self.evidence.value) or None,
         )
         await interaction.response.send_message(
-            f"✅ Report `#{report_id}` filed. Moderators will review it.",
+            f"✅ Report `#{report_id}` filed for `{self.target_code}`. "
+            "Moderators will review it — only approved reports enter the index.",
             ephemeral=True,
         )
         cfg = await load_config(self.bot, interaction.guild)
@@ -82,22 +117,13 @@ class ReportModal(discord.ui.Modal, title="Report a user"):
 
     def _embed(self, report_id: int) -> discord.Embed:
         embed = discord.Embed(
-            title=f"Report #{report_id}",
+            title=f"Report #{report_id} — friend code",
             description=self.details.value,
             color=discord.Color.red(),
             timestamp=discord.utils.utcnow(),
         )
-        embed.add_field(name="Category", value=self.category, inline=True)
-        if self.target:
-            embed.add_field(
-                name="Reported user",
-                value=f"{self.target} ({self.target.id})",
-                inline=True,
-            )
-        if self.target_code:
-            embed.add_field(
-                name="Friend code", value=f"`{mask_code(self.target_code)}`", inline=True
-            )
+        embed.add_field(name="Friend code", value=f"`{self.target_code}`", inline=True)
+        embed.add_field(name="Reason", value=reason_label(self.reason), inline=True)
         if self.evidence.value:
             embed.add_field(name="Evidence", value=str(self.evidence.value)[:1000], inline=False)
         embed.set_footer(text=f"Reporter ID: {self.reporter_id}")
@@ -142,10 +168,12 @@ class ReportReviewView(discord.ui.View):
         entries: list[tuple[str, str]] = []
         if report["target_code"]:
             entries.append(("friend_code", report["target_code"]))
+        # Legacy reports (filed before /report went code-only) may name a user.
         if report["target_user_id"]:
             entries.append(("discord_id", str(report["target_user_id"])))
 
-        reason = f"Report #{report['id']} ({report['category']}): {report['details'][:180]}"
+        label = reason_label(report["category"])
+        reason = f"Report #{report['id']} ({label}): {report['details'][:180]}"
         for kind, value in entries:
             await self.bot.db.blacklist_add(
                 kind, value, reason,
@@ -258,46 +286,44 @@ class ReportCommand(commands.Cog):
         for report in await self.bot.db.reports_pending():
             self.bot.add_view(ReportReviewView(self.bot, report["id"]))
 
-    @app_commands.command(name="report", description="Report a user for misconduct")
-    @app_commands.describe(
-        user="Discord user to report (optional if you provide friend code)",
-        friend_code="Their Among Us friend code (optional if you provide user)",
-        category="Type of misconduct",
+    @app_commands.command(
+        name="report", description="Report an Among Us friend code for misconduct"
     )
-    @app_commands.choices(category=CATEGORIES)
+    @app_commands.describe(
+        friend_code="The friend code you're reporting — it looks like Example#0000",
+        reason="Why you're reporting it",
+    )
+    @app_commands.choices(reason=REASONS)
     async def report(
         self,
         interaction: discord.Interaction,
-        category: app_commands.Choice[str],
-        user: discord.User | None = None,
-        friend_code: str | None = None,
+        friend_code: str,
+        reason: app_commands.Choice[str],
     ) -> None:
         if interaction.guild is None:
             await interaction.response.send_message("Run this inside the server.", ephemeral=True)
             return
-        if user is None and not friend_code:
+
+        code = normalize_code(friend_code)
+        if not re.fullmatch(self.bot.settings.fc_pattern, code):
             await interaction.response.send_message(
-                "Give me at least a **user** or an **Among Us friend code** to report.",
+                f"`{friend_code.strip()}` doesn't look like an Among Us friend code. "
+                "It should look like `Example#0000` (in-game: **Settings → Account**).",
                 ephemeral=True,
             )
             return
+
+        if code in await self.bot.db.codes_for_discord(interaction.user.id):
+            await interaction.response.send_message(
+                "That's your own friend code — you can't report yourself.",
+                ephemeral=True,
+            )
+            return
+
         await interaction.response.send_modal(
-            ReportModal(self.bot, category.value, user,
-                        "".join(friend_code.split()).upper() if friend_code else None,
-                        interaction.user.id)
+            ReportModal(self.bot, reason.value, code, interaction.user.id)
         )
-
-
-@app_commands.context_menu(name="Report User")
-async def report_context_menu(interaction: discord.Interaction, user: discord.User):
-    if interaction.guild is None:
-        await interaction.response.send_message("Server only.", ephemeral=True)
-        return
-    bot: commands.Bot = interaction.client  # type: ignore[assignment]
-    modal = ReportModal(bot, "other", user, None, interaction.user.id)
-    await interaction.response.send_modal(modal)
 
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ReportCommand(bot))
-    bot.tree.add_command(report_context_menu)

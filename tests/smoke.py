@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db import Database  # noqa: E402
 from helpers import mask_code  # noqa: E402
+from cogs.reports import REASONS, normalize_code, reason_label  # noqa: E402
 
 PASS, FAIL = 0, 0
 
@@ -150,6 +151,10 @@ def helper_tests() -> None:
     print("helpers:")
     check("mask hides middle", mask_code("RANDOMCODE#1234") == "RAN" + "•" * 10 + "34")
     check("mask short code", mask_code("AB12") == "AB••")
+    check("normalize_code strips + uppercases", normalize_code(" ex ample#0000 ") == "EXAMPLE#0000")
+    check("reason label for new category", reason_label("predatory") == REASONS[0].name)
+    check("reason label for legacy category", reason_label("hate") == "Hate speech / slurs")
+    check("reason label falls back to raw", reason_label("mystery") == "mystery")
 
 
 def main() -> int:

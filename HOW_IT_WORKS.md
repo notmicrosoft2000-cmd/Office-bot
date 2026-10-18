@@ -9,7 +9,7 @@ The bot prevents known bad Among Us players from slipping back in. It uses **fri
 - **Alt detection**: Every time someone verifies with a friend code, the bot links that code → that Discord account. If that code ever gets indexed, **every Discord account that ever used that code** is also banned. This catches alt accounts.
 - **Verified role is optional**: On success the bot normally gives `AU Verified` and removes `AU Unverified`. Admins can turn the role grant off so verified members just lose the unverified role. `I don't play AU` members get `AU Non-Player`.
 - **Anti-lie**: If someone clicks "I don't play Among Us" but later submits a friend code, the bot can **ban** them (default), **flag** them for mods, or ignore it (configurable).
-- **Mod approval for reports**: `/report` lets anyone report someone. Reports go to a private mod queue with **Approve → blacklist** / **Reject**. **Only approved reports enter the index**. This stops people from maliciously framing others.
+- **Mod approval for reports**: `/report` lets anyone report an Among Us **friend code** (with a reason such as predatory behaviour). Reports go to a private mod queue with **Approve → blacklist** / **Reject**. **Only approved reports enter the index**. This stops people from maliciously framing others.
 - **Persistence**: All links, reports, and the index live in `data/au_verify.db` on the server. Pending reports survive restarts.
 
 ## How to set it up (right now)
@@ -50,7 +50,7 @@ Running it does these things in order:
 | `/setup` | Admin | Interactive setup menu (dropdowns + buttons); `/gate-setup` is an alias |
 | `/gate-lock` | Admin | Re-apply the "Unverified can only see #verify" lockdown |
 | `/verify` | Anyone (in server) | Re-opens the friend code form |
-| `/report` | Anyone | File a report → goes to mod queue for approval/rejection |
+| `/report` | Anyone | Report a friend code (`Example#0000`) + reason → mod queue for approval/rejection |
 | `/codes` | Mod | View every saved friend code (+ linked alts), or export a CSV |
 | `/blacklist add/remove/list` | Mod | Manually manage the index |
 | `/whois` | Mod | See a user's linked codes + index status |
@@ -69,9 +69,9 @@ Running it does these things in order:
 1. New Discord account joins → gets to gate.
 2. Submits the indexed friend code → index hit → **banned immediately**. Also, if the code was linked to others, the system already would have caught them on join/verify.
 
-**Someone reports a bad user:**
-1. Runs `/report user:@X` (or gives friend code) with category + details/evidence.
-2. Mod sees it in `#mod-reports` → clicks **Approve → blacklist**. That adds the code/user to index, **bans everyone currently linked to it**, and logs to `#mod-logs`.
+**Someone reports a bad actor:**
+1. Runs `/report` with the **friend code** (`Example#0000`) and a **reason** (predatory behaviour, harassment, ban evasion, …), then describes what happened and can attach evidence.
+2. Mod sees it in `#mod-reports` → clicks **Approve → blacklist**. That adds the code to the index, **bans everyone currently linked to it**, and logs to `#mod-logs`.
 3. Clicking **Reject** just closes it out.
 
 **Someone lies about not playing:**

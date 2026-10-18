@@ -201,20 +201,24 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 cp .env.example .env && $EDITOR .env      # paste the real token
 
-# 3. Install the systemd unit (see deploy/au-verify.service)
-#    It expects the app at ~/au-verify and runs as the nept user.
+# 3. Install the systemd units (both are *user* units — no sudo needed)
+mkdir -p ~/.config/systemd/user
+cp deploy/au-verify.user.service ~/.config/systemd/user/au-verify.service
+cp deploy/au-verify-watchdog.service deploy/au-verify-watchdog.timer ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now au-verify
+systemctl --user enable --now au-verify-watchdog.timer
 ```
 
-`deploy/au-verify.service` is ready to copy to
-`/etc/systemd/system/au-verify.service` (or `~/.config/systemd/user/` for a
-user unit). Then:
+`loginctl enable-linger nept` must be on for those to run without an interactive
+login:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now au-verify
-journalctl -u au-verify -f
+journalctl --user -u au-verify -f                       # bot logs
+systemctl --user list-timers au-verify-watchdog.timer   # should show a next run
+systemctl --user --failed                               # empty when all is well
 ```
 
-To update later: re-run the `rsync`, then `sudo systemctl restart au-verify`.
-The SQLite database lives in `data/` on the server and is never overwritten by
-a deploy.
+To update later: re-run the `rsync`, then `systemctl --user restart au-verify`.
+The SQLite database lives in `data/` on the server and is never overwritten by a
+deploy — that is also where the watchdog keeps its heartbeat and state files.

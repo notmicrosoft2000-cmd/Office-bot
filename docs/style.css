@@ -1,142 +1,188 @@
+/* ==========================================================================
+   Office Bot — site styles
+   Layers on top of 7.css (Windows 7 / Aero look):
+     https://cdn.jsdelivr.net/npm/7.css@0.21.1/dist/7.css
+   7.css is used purely as a visual language — no desktop/taskbar metaphor.
+   ========================================================================== */
+
 :root {
-  --bg: #0f1117;
-  --card: #171a23;
-  --fg: #e6e8ee;
-  --muted: #9aa3b2;
-  --accent: #5865f2;
-  --accent-2: #7c84ff;
-  --border: #262b36;
-  --warn: #f0b232;
+  --ob-font: "Segoe UI", "SegoeUI", "Noto Sans", system-ui, -apple-system, sans-serif;
+
+  /* 7.css derives every control from this one shorthand; bumping it scales
+     the whole UI to something readable on modern screens (default is 9pt). */
+  --w7-font: 10pt/1.5 var(--ob-font);
+
+  /* Aero window accent. */
+  --w7-w-bg: #4580c4;
+
+  --page-max: 940px;
+  --rule: #d7dde8;
 }
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font: 16px/1.7 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  min-height: 100dvh;
+  color: #111;
+  background: #24486f;             /* fallback behind the photo */
+  padding: clamp(0.5rem, 2vw, 2.25rem) clamp(0.5rem, 2vw, 2.25rem) 2.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-a { color: var(--accent-2); text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-header.site {
-  position: sticky;
-  top: 0;
-  backdrop-filter: blur(8px);
-  background: rgba(15, 17, 23, 0.82);
-  border-bottom: 1px solid var(--border);
-  z-index: 10;
+/* Fixed, dimmed photo backdrop — gives the glass frame something to blur
+   and ties the page to the bot's avatar. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(rgba(9, 20, 38, 0.55), rgba(9, 20, 38, 0.66)),
+    url("assets/wallpaper.jpg") center / cover no-repeat;
 }
 
-.nav {
-  max-width: 860px;
+.wrap {
+  width: 100%;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 14px 20px;
+}
+
+/* --- window ------------------------------------------------------------- */
+.window { max-width: 100%; }
+.window-body { overflow-wrap: anywhere; }
+
+/* Small square app icon inside the title bar. */
+.title-bar-text { display: flex; align-items: center; gap: 7px; }
+.tb-icon { width: 16px; height: 16px; border-radius: 2px; display: block; }
+
+/* --- menu bar used as site navigation ----------------------------------- */
+[role="menubar"] { flex-wrap: wrap; }
+[role="menubar"] > [role="menuitem"] a {
+  color: inherit;
+  text-decoration: none;
+  display: block;
+}
+[role="menubar"] > [role="menuitem"] a:focus-visible { outline: none; }
+[role="menubar"] > [role="menuitem"].active { background: #39f; color: #fff; }
+[role="menubar"] > [role="menuitem"].spacer { margin-left: auto; }
+
+/* --- hero --------------------------------------------------------------- */
+.hero {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
+  margin: 2px 0 14px;
+}
+.avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  flex: none;
+  object-fit: cover;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.hero h1 { margin: 0; font-size: 1.65rem; line-height: 1.15; }
+.hero .sub { margin: 5px 0 0; color: #333; }
+.tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 3px;
+  background: #e6edf9;
+  border: 1px solid #b9c7de;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* --- action row (real links styled as native buttons) ------------------- */
+.actions {
+  display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 16px;
 }
+.actions [role="button"] { min-height: 26px; text-decoration: none; }
 
-.brand {
-  font-weight: 700;
-  letter-spacing: 0.2px;
-  color: var(--fg);
-  margin-right: auto;
-}
-
-.brand span { color: var(--accent-2); }
-
-.nav a.navlink { color: var(--muted); font-size: 0.95rem; }
-.nav a.navlink:hover { color: var(--fg); text-decoration: none; }
-.nav a.navlink.active { color: var(--fg); }
-
-main {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 40px 20px 64px;
-}
-
-.hero h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 10px; }
-.hero p.lead { font-size: 1.12rem; color: var(--muted); margin: 0 0 26px; }
-
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 28px 0; }
-@media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
-
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 20px 22px;
-}
-
-.card h3 { margin: 0 0 6px; font-size: 1.05rem; }
-.card p { margin: 0 0 12px; color: var(--muted); font-size: 0.95rem; }
-.card .go { font-weight: 600; }
-
-h1 { font-size: 1.9rem; line-height: 1.25; margin: 0 0 6px; }
-h2 { font-size: 1.25rem; margin: 34px 0 8px; }
-h3 { font-size: 1.05rem; margin: 24px 0 6px; }
-
-p, li { color: #d7dae2; }
-ul { padding-left: 22px; }
-li { margin: 5px 0; }
-
-.muted { color: var(--muted); }
+/* --- typography --------------------------------------------------------- */
+h1, h2, h3, h4 { line-height: 1.25; }
+h2 { font-size: 1.2rem; margin: 24px 0 6px; }
+h3 { font-size: 1.05rem; margin: 18px 0 4px; }
+p, li { line-height: 1.55; }
+ul, ol { padding-left: 22px; }
+li { margin: 3px 0; }
+.lead { font-size: 1.03rem; }
+.muted { color: #555; }
 .small { font-size: 0.88rem; }
-
 .effective {
   display: inline-block;
-  background: rgba(88, 101, 242, 0.12);
-  border: 1px solid rgba(88, 101, 242, 0.35);
-  color: #c3c8ff;
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 0.82rem;
-  margin-bottom: 18px;
+  margin: 6px 0 2px;
+  padding: 2px 9px;
+  border: 1px solid #c9d3e6;
+  background: #eef3fb;
+  border-radius: 3px;
+}
+.contact { font-weight: 600; }
+
+code, kbd {
+  background: #e9edf5;
+  border: 1px solid #cdd6e6;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+  font-size: 0.92em;
 }
 
-.callout {
-  background: rgba(240, 178, 50, 0.08);
-  border: 1px solid rgba(240, 178, 50, 0.35);
-  border-radius: 12px;
-  padding: 14px 18px;
-  margin: 20px 0;
+/* --- callouts ----------------------------------------------------------- */
+.note {
+  margin: 14px 0;
+  padding: 9px 11px;
+  border: 1px solid #e3c98a;
+  background: #fff8e6;
+  border-radius: 3px;
+}
+.note p { margin: 0; }
+.note p + p { margin-top: 6px; }
+
+hr { border: 0; border-top: 1px solid var(--rule); margin: 22px 0; }
+
+/* --- tables (7.css list-view) ------------------------------------------- */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 12px 0; }
+.table-wrap table { min-width: 520px; }
+
+/* --- status bar --------------------------------------------------------- */
+.status-bar { flex-wrap: wrap; }
+.status-bar-field { flex: 1 1 auto; }
+.status-bar-field:last-child { text-align: right; }
+
+/* --- phones / narrow screens ------------------------------------------- */
+@media (max-width: 640px) {
+  :root { --w7-font: 9.5pt/1.5 var(--ob-font); }
+  .hero { gap: 12px; }
+  .avatar { width: 66px; height: 66px; }
+  .hero h1 { font-size: 1.35rem; }
+  [role="menubar"] > [role="menuitem"] { padding: 6px 9px; }
+  .actions [role="button"] { flex: 1 1 auto; text-align: center; }
+  .status-bar-field:last-child { text-align: left; }
 }
 
-.callout p { margin: 0; color: #f4d79a; }
-
-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.94rem; }
-th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-th { color: var(--muted); font-weight: 600; }
-
-code {
-  background: #0b0d13;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 1px 6px;
-  font-size: 0.9em;
+@media (max-width: 380px) {
+  [role="menubar"] > [role="menuitem"] { padding: 6px 7px; }
+  .hero { flex-direction: column; align-items: flex-start; text-align: left; }
 }
 
-footer.site {
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.88rem;
+/* Landscape phones: trim vertical padding so more content is visible. */
+@media (max-height: 480px) and (orientation: landscape) {
+  body { padding-top: 0.5rem; padding-bottom: 1rem; }
 }
 
-.foot {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 22px 20px;
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  justify-content: space-between;
+@media print {
+  body { background: #fff; padding: 0; display: block; }
+  body::before { content: none; }
+  .window { border: 0; box-shadow: none; }
+  [role="menubar"], .actions { display: none; }
 }
-
-footer.site a { color: var(--muted); }
-footer.site a:hover { color: var(--fg); }

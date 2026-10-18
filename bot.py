@@ -47,7 +47,7 @@ class AUVerifyBot(commands.Bot):
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (%s)", self.user, self.user and self.user.id)
-        await self.change_presence(activity=discord.Game(name="Among Us verification"))
+        await self.change_presence(activity=discord.Game(name="Office Bot"))
 
 
 async def main() -> None:

@@ -3,172 +3,197 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Privacy Policy — AU Gate</title>
-  <meta name="description" content="Privacy Policy for the AU Gate Discord bot.">
+  <title>Privacy Policy — Office Bot</title>
+  <meta name="description" content="What data Office Bot stores, why, where it lives, and how to have it removed.">
+  <meta name="theme-color" content="#4580c4">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Privacy Policy — Office Bot">
+  <meta property="og:description" content="How Office Bot handles your data in the IamKing Community server.">
+  <meta property="og:image" content="https://notmicrosoft2000-cmd.github.io/Office-bot/assets/avatar.png">
+  <link rel="icon" href="assets/avatar.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/7.css@0.21.1/dist/7.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="site">
-    <nav class="nav">
-      <a class="brand" href="index.html">AU <span>Gate</span></a>
-      <a class="navlink" href="index.html">Home</a>
-      <a class="navlink active" href="privacy.html">Privacy Policy</a>
-      <a class="navlink" href="terms.html">Terms of Service</a>
-    </nav>
-  </header>
+  <main class="wrap">
+    <div class="window glass active">
+      <div class="title-bar">
+        <div class="title-bar-text">
+          <img class="tb-icon" src="assets/avatar.png" alt="">
+          Office Bot — Privacy Policy
+        </div>
+      </div>
 
-  <main>
-    <h1>Privacy Policy</h1>
-    <div class="effective">Effective date: <strong>18 October 2026</strong></div>
+      <div class="window-body has-space">
+        <ul role="menubar" class="can-hover">
+          <li role="menuitem"><a href="index.html">Home</a></li>
+          <li role="menuitem" class="active"><a href="privacy.html" aria-current="page">Privacy</a></li>
+          <li role="menuitem"><a href="terms.html">Terms</a></li>
+          <li role="menuitem" class="spacer"><a href="https://discord.com/oauth2/authorize?client_id=1560994935895883897&amp;permissions=8&amp;integration_type=0&amp;scope=bot" target="_blank" rel="noopener">Add to server</a></li>
+        </ul>
 
-    <p>
-      This policy explains what information the <strong>AU Gate</strong> Discord bot (the “bot”,
-      “we”, “us”) collects when you join or use the IamKing Community server, why we collect it,
-      and what you can do about it. It applies only to the bot and the server it runs in.
-    </p>
+        <h1>Privacy Policy</h1>
+        <div class="effective">Effective date: <strong>18 October 2026</strong></div>
 
-    <div class="callout">
-      <p><strong>Operator contact:</strong> [add a contact email or Discord handle — e.g. the server owner].
-      Replace this placeholder before relying on this policy.</p>
+        <p>
+          This policy explains what information <strong>Office Bot</strong> (the “bot”, “we”, “us”)
+          collects when you join or use the <strong>IamKing Community (anti predators)</strong>
+          server, why we collect it, and what you can do about it. It applies only to the bot and
+          the server it runs in.
+        </p>
+
+        <div class="note">
+          <p><strong>Operator contact:</strong> Discord <span class="contact">@neptunetheii</span>
+          · email <span class="contact">neptunetheii@proton.me</span>.</p>
+        </div>
+
+        <h2>1. Who this applies to</h2>
+        <p>
+          This policy applies to members of the Discord server where Office Bot is active. If you
+          prefer that the data below not be processed, please don't join the server — or leave it
+          and request deletion (section 8).
+        </p>
+
+        <h2>2. What we collect</h2>
+        <p>When you interact with the bot, we may store the following:</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th class="highlighted">Where it comes from</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Discord user ID and username</td>
+                <td>Your Discord account</td>
+                <td>To identify you, assign roles, and match against the index.</td>
+              </tr>
+              <tr>
+                <td>Among Us friend code(s)</td>
+                <td>What you submit via the verification form</td>
+                <td>To gate access and detect ban evasion, since friend codes are permanent.</td>
+              </tr>
+              <tr>
+                <td>Join / verification timestamps and status</td>
+                <td>Your activity in the server</td>
+                <td>To run the verification timeout and reminder DMs.</td>
+              </tr>
+              <tr>
+                <td>Report contents (category, description, evidence links, reporter ID)</td>
+                <td>Submitted by members via <code>/report</code></td>
+                <td>To let moderators review reports of misconduct.</td>
+              </tr>
+              <tr>
+                <td>Index entries (friend code and/or Discord ID, reason, evidence)</td>
+                <td>Moderator actions and approved reports</td>
+                <td>To block known bad actors and their linked accounts.</td>
+              </tr>
+              <tr>
+                <td>Audit log (verify, kick, ban, index changes)</td>
+                <td>Bot activity</td>
+                <td>To keep a moderation record and allow appeals.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted small">
+          The bot does not read your private messages, does not collect your email or payment
+          details, and uses no advertising or tracking cookies on these web pages.
+        </p>
+
+        <h2>3. Why we process it</h2>
+        <ul>
+          <li>To operate the membership gate and grant the correct roles.</li>
+          <li>To keep the community safe from reported and repeat bad actors (our legitimate interest).</li>
+          <li>To let moderators review reports and handle appeals.</li>
+          <li>To comply with Discord's and applicable platform rules.</li>
+        </ul>
+
+        <h2>4. Where it is stored and who can see it</h2>
+        <p>
+          Data is stored in a private database on a self-hosted server operated by the community.
+          It is not sold or rented. Access is limited to the bot's operators and the server's
+          moderators. Summary information (for example “this member was verified” or “this member
+          was banned”) may be posted to the server's private moderator channels.
+        </p>
+
+        <h2>5. Sharing with third parties</h2>
+        <p>
+          We do not share your data with third parties for marketing. Data is processed through
+          Discord as part of normal bot operation and is therefore also subject to Discord's own
+          <a href="https://discord.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+          If the community later links this bot with other servers, this policy will be updated
+          first and the change announced (see section 10).
+        </p>
+
+        <h2>6. How long we keep it</h2>
+        <ul>
+          <li><strong>Verification and membership records:</strong> while you are a member and for a reasonable period after.</li>
+          <li><strong>Index entries:</strong> retained while they are considered necessary for community safety.</li>
+          <li><strong>Reports and audit logs:</strong> retained for moderation record-keeping and appeals.</li>
+        </ul>
+        <p>You can ask for your data to be removed at any time (section 8).</p>
+
+        <h2>7. Security</h2>
+        <p>
+          We take reasonable measures to protect the data — private hosting, restricted access,
+          and secure tokens. No system is perfectly secure, so we cannot guarantee absolute
+          security. Never share your Discord token or password with anyone, including moderators.
+        </p>
+
+        <h2>8. Your rights and how to exercise them</h2>
+        <p>You may contact the operator (section 12) to:</p>
+        <ul>
+          <li><strong>Access</strong> the data we hold about you.</li>
+          <li><strong>Correct</strong> inaccurate data.</li>
+          <li><strong>Delete</strong> your data.</li>
+          <li><strong>Object</strong> to processing.</li>
+        </ul>
+        <p>
+          We will respond within a reasonable time. Some records — in particular index entries and
+          audit logs — may be kept, in whole or in part, where retaining them is necessary to keep
+          the community safe or to comply with the law. Where that happens, we will explain why.
+        </p>
+
+        <h2>9. Children</h2>
+        <p>
+          The server and bot are intended for people who meet Discord's minimum age requirement
+          (13+, or higher where required by local law). We do not knowingly collect data from anyone
+          below that age.
+        </p>
+
+        <h2>10. Changes to this policy</h2>
+        <p>
+          We may update this policy. Material changes will be announced in the server, and the
+          effective date at the top of this page will change. Continued use of the server after a
+          change means you accept the updated policy.
+        </p>
+
+        <h2>11. International users</h2>
+        <p>
+          The bot is operated from the operator's location, and your data may be processed there.
+          By using the server you understand this transfer may occur.
+        </p>
+
+        <h2>12. Contact</h2>
+        <p>
+          Questions or requests: Discord <span class="contact">@neptunetheii</span> · email
+          <span class="contact">neptunetheii@proton.me</span>. You can also reach the server's
+          moderators directly in Discord.
+        </p>
+      </div>
+
+      <div class="status-bar">
+        <p class="status-bar-field">Effective 18 October 2026</p>
+        <p class="status-bar-field">Office Bot · Office#6118</p>
+        <p class="status-bar-field">© <span class="js-year">2026</span> IamKing Community</p>
+      </div>
     </div>
-
-    <h2>1. Who this applies to</h2>
-    <p>
-      This policy applies to members of the Discord server where AU Gate is active. If you do not
-      wish to have the data described below processed, do not join the server (or leave it and
-      request deletion, see section 8).
-    </p>
-
-    <h2>2. What we collect</h2>
-    <p>When you interact with the bot, we may store the following:</p>
-    <table>
-      <tr><th>Data</th><th>Where it comes from</th><th>Why</th></tr>
-      <tr>
-        <td>Discord user ID and username</td>
-        <td>Your Discord account</td>
-        <td>To identify you, assign roles, and match against the index.</td>
-      </tr>
-      <tr>
-        <td>Among Us friend code(s)</td>
-        <td>What you submit via the verification form</td>
-        <td>To gate access and detect ban evasion, since friend codes are permanent.</td>
-      </tr>
-      <tr>
-        <td>Join / verification timestamps and status</td>
-        <td>Your activity in the server</td>
-        <td>To run the verification timeout and reminders.</td>
-      </tr>
-      <tr>
-        <td>Report contents (category, description, evidence links, reporter ID)</td>
-        <td>Submitted by members via <code>/report</code></td>
-        <td>To let moderators review reports of misconduct.</td>
-      </tr>
-      <tr>
-        <td>Index entries (friend code and/or Discord ID, reason, evidence)</td>
-        <td>Moderator actions and approved reports</td>
-        <td>To block known bad actors and their linked accounts.</td>
-      </tr>
-      <tr>
-        <td>Audit log (actions such as verify, kick, ban, index changes)</td>
-        <td>Bot activity</td>
-        <td>To keep a moderation record and allow appeals.</td>
-      </tr>
-    </table>
-    <p class="muted small">
-      The bot does not read your private messages, does not collect your email or payment details,
-      and does not use advertising or tracking cookies on these web pages.
-    </p>
-
-    <h2>3. Why we process it</h2>
-    <ul>
-      <li>To operate the membership gate and grant the correct roles.</li>
-      <li>To keep the community safe from reported and repeat bad actors (our legitimate interest).</li>
-      <li>To let moderators review reports and handle appeals.</li>
-      <li>To comply with Discord’s and applicable platform rules.</li>
-    </ul>
-
-    <h2>4. Where it is stored and who can see it</h2>
-    <p>
-      Data is stored in a private database on a self-hosted server operated by the community. It is
-      not sold or rented. Access is limited to the bot’s operators and the server’s moderators.
-      Summary information (for example “this user was verified” or “this user was banned”) may be
-      posted to the server’s private moderator channels.
-    </p>
-
-    <h2>5. Sharing with third parties</h2>
-    <p>
-      We do not share your data with third parties for marketing. Data is processed through Discord
-      as part of normal bot operation and is therefore also subject to Discord’s own
-      <a href="https://discord.com/privacy">Privacy Policy</a>. If the community later links this bot
-      with other servers, this policy will be updated first and the change announced (see section 10).
-    </p>
-
-    <h2>6. How long we keep it</h2>
-    <ul>
-      <li>Verification and membership records: while you are a member and for a reasonable period after.</li>
-      <li>Index entries: retained while they are considered necessary for community safety.</li>
-      <li>Reports and audit logs: retained for moderation record-keeping and appeals.</li>
-    </ul>
-    <p>You can ask for your data to be removed at any time (section 8).</p>
-
-    <h2>7. Security</h2>
-    <p>
-      We take reasonable measures to protect the data (private hosting, restricted access, secure
-      tokens). No system is perfectly secure, so we cannot guarantee absolute security. Do not share
-      your Discord token or password with anyone, including moderators.
-    </p>
-
-    <h2>8. Your rights and how to exercise them</h2>
-    <p>You may contact the operator (section 12) to:</p>
-    <ul>
-      <li><strong>Access</strong> the data we hold about you.</li>
-      <li><strong>Correct</strong> inaccurate data.</li>
-      <li><strong>Delete</strong> your data.</li>
-      <li><strong>Object</strong> to processing.</li>
-    </ul>
-    <p>
-      We will respond within a reasonable time. Some records — in particular index entries and audit
-      logs — may be kept, in whole or in part, where retaining them is necessary to keep the
-      community safe or to comply with the law. Where that happens, we will explain why.
-    </p>
-
-    <h2>9. Children</h2>
-    <p>
-      The server and bot are intended for people who meet Discord’s minimum age requirement
-      (13+, or higher where required by local law). We do not knowingly collect data from anyone
-      below that age.
-    </p>
-
-    <h2>10. Changes to this policy</h2>
-    <p>
-      We may update this policy. Material changes will be announced in the server, and the effective
-      date at the top of this page will change. Continued use of the server after a change means you
-      accept the updated policy.
-    </p>
-
-    <h2>11. International users</h2>
-    <p>
-      The bot is operated from the operator’s location, and your data may be processed there. By using
-      the server you understand this transfer may occur.
-    </p>
-
-    <h2>12. Contact</h2>
-    <p>
-      Questions or requests: <strong>[add contact email or Discord handle]</strong>. You can also reach
-      the server’s moderators directly in Discord.
-    </p>
   </main>
 
-  <footer class="site">
-    <div class="foot">
-      <span>© <span id="y">2026</span> AU Gate · IamKing Community</span>
-      <span>
-        <a href="privacy.html">Privacy</a> ·
-        <a href="terms.html">Terms</a>
-      </span>
-    </div>
-  </footer>
-
-  <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
+  <script src="app.js" defer></script>
 </body>
 </html>

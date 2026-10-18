@@ -1,9 +1,14 @@
-# Among Us Friend-Code Gate
+# Office Bot
 
-A Discord bot that verifies members against a shared index of Among Us friend
-codes. Friend codes are permanent, account-bound identifiers that players
-**cannot change**, so they survive Discord account changes — which makes them a
-genuinely useful ban-evasion tripwire.
+Discord bot (`Office#6118`) that verifies members against a shared index of
+Among Us friend codes for the **IamKing Community (anti predators)** server.
+
+Friend codes are permanent, account-bound identifiers that players **cannot
+change**, so they survive Discord account changes — which makes them a genuinely
+useful ban-evasion tripwire.
+
+- **Policies site:** <https://notmicrosoft2000-cmd.github.io/Office-bot/> — Privacy Policy and Terms of Service.
+- **Add to server:** <https://discord.com/oauth2/authorize?client_id=1560994935895883897&permissions=8&integration_type=0&scope=bot>
 
 ## What it does
 
@@ -111,14 +116,16 @@ tests/smoke.py    DB + command-registration tests (no token needed)
 
 ## Policies & GitHub Pages
 
-The `docs/` folder is a small static site (Privacy Policy + Terms of Service) that
-GitHub Pages can serve directly — no build step.
+The `docs/` folder is a small static site (Home, Privacy Policy, Terms of
+Service) that GitHub Pages serves directly — no build step. It's styled with
+[7.css](https://khang-nd.github.io/7.css/) (a Windows 7 / Aero CSS library) so
+the pages read like a native application window, and it's responsive from
+desktop down to portrait phones.
 
-- **Enable it:** repo **Settings → Pages → Build and deployment → Source:
-  “Deploy from a branch” → Branch `main`, Folder `/docs`**. The site publishes at
-  `https://<user>.github.io/<repo>/`.
-- **Before relying on it:** replace the bracketed placeholders in
-  `docs/privacy.html` and `docs/terms.html` (operator contact + governing law).
+- **Live:** <https://notmicrosoft2000-cmd.github.io/Office-bot/>
+- **Pages source:** `main` branch, `/docs` folder (repo Settings → Pages).
+- **Contact / jurisdiction** used in the policies: Discord `@neptunetheii`,
+  `neptunetheii@proton.me`, governed by the laws of Myanmar (Burma).
 - `.nojekyll` is included so Pages serves the files as-is.
 
 ## Honest limitations

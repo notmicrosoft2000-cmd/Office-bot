@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AU Gate — Policies</title>
+  <meta name="description" content="Privacy Policy and Terms of Service for the AU Gate Discord bot.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site">
+    <nav class="nav">
+      <a class="brand" href="index.html">AU <span>Gate</span></a>
+      <a class="navlink active" href="index.html">Home</a>
+      <a class="navlink" href="privacy.html">Privacy Policy</a>
+      <a class="navlink" href="terms.html">Terms of Service</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>AU Gate</h1>
+      <p class="lead">
+        A Discord verification bot that gates new members by their Among Us friend code
+        and keeps a moderator-approved index of reported bad actors, so they can't quietly
+        rejoin under a new Discord account.
+      </p>
+    </section>
+
+    <div class="grid">
+      <a class="card" href="privacy.html">
+        <h3>Privacy Policy</h3>
+        <p>What data the bot stores, why, where it lives, and how to have it removed.</p>
+        <span class="go">Read the policy →</span>
+      </a>
+      <a class="card" href="terms.html">
+        <h3>Terms of Service</h3>
+        <p>The rules for using the bot, what it does and does not guarantee, and liability limits.</p>
+        <span class="go">Read the terms →</span>
+      </a>
+    </div>
+
+    <h2>What the bot does</h2>
+    <ul>
+      <li><strong>Join gate</strong> — new members must submit an Among Us friend code or declare they don't play within a set time, or they're removed.</li>
+      <li><strong>Index</strong> — a moderator-approved list of friend codes and Discord IDs tied to reported misconduct.</li>
+      <li><strong>Ban evasion detection</strong> — friend codes are permanent and account-bound, so they catch people changing Discord accounts.</li>
+      <li><strong>Reports</strong> — members can report misconduct; reports only enter the index after a moderator approves them.</li>
+    </ul>
+
+    <div class="callout">
+      <p><strong>Note:</strong> AU Gate is a community-run bot. It is not affiliated with, endorsed by,
+      or operated by Discord Inc. or Innersloth LLC.</p>
+    </div>
+  </main>
+
+  <footer class="site">
+    <div class="foot">
+      <span>© <span id="y">2026</span> AU Gate · IamKing Community</span>
+      <span>
+        <a href="privacy.html">Privacy</a> ·
+        <a href="terms.html">Terms</a>
+      </span>
+    </div>
+  </footer>
+
+  <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+"""Local smoke tests: DB behaviour + cog/command loading. No Discord token needed.
+
+Run:  .venv/bin/python -m tests.smoke
+"""
+from __future__ import annotations
+
+import asyncio
+import os
+import sys
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from db import Database  # noqa: E402
+from helpers import mask_code  # noqa: E402
+
+PASS, FAIL = 0, 0
+
+
+def check(label: str, cond: bool) -> None:
+    global PASS, FAIL
+    if cond:
+        PASS += 1
+        print(f"  ok   {label}")
+    else:
+        FAIL += 1
+        print(f"  FAIL {label}")
+
+
+async def db_tests() -> None:
+    print("database:")
+    tmp = tempfile.mkdtemp()
+    db = Database(os.path.join(tmp, "test.db"))
+    await db.connect()
+
+    # settings
+    await db.set_setting("role_verified", "111")
+    check("setting round-trip", await db.get_setting("role_verified") == "111")
+    check("missing setting is None", await db.get_setting("nope") is None)
+    check("multi-get", await db.get_settings(["role_verified", "nope"]) == {"role_verified": "111"})
+
+    # members + codes
+    await db.record_join(1, "alice")
+    await db.set_status(1, "verified", username="alice", friend_code="randomcode#1234")
+    m = await db.get_member(1)
+    check("member stored verified", m and m["status"] == "verified")
+    check("code normalized uppercase", m and m["friend_code"] == "RANDOMCODE#1234")
+    await db.link_code("randomcode#1234", 1)
+    check("code link", await db.discord_ids_for_code("RandomCode#1234") == [1])
+    check("codes for discord", await db.codes_for_discord(1) == ["RANDOMCODE#1234"])
+    check("members_with_code", await db.members_with_code("randomcode#1234") == [1])
+
+    # second account linking the same code (alt)
+    await db.record_join(2, "bob")
+    await db.link_code("RANDOMCODE#1234", 2)
+    check("alt detected via code", sorted(await db.discord_ids_for_code("RANDOMCODE#1234")) == [1, 2])
+
+    # blacklist
+    eid = await db.blacklist_add("friend_code", "randomcode#1234", "griefing", 99)
+    check("blacklist add returns id", isinstance(eid, int) and eid > 0)
+    hit = await db.is_blacklisted(friend_code="randomcode#1234")
+    check("blacklist hit by code", hit and hit["id"] == eid)
+    check("blacklist miss", await db.is_blacklisted(friend_code="nope#0000") is None)
+    eid2 = await db.blacklist_add("discord_id", "2", "harassment", 99)
+    check("blacklist hit by discord id", (await db.is_blacklisted(discord_id=2))["id"] == eid2)
+    check("idempotent upsert (same id)", await db.blacklist_add(
+        "friend_code", "RANDOMCODE#1234", "updated", 99) == eid)
+    rows = await db.blacklist_list()
+    check("blacklist list length", len(rows) == 2)
+    removed = await db.blacklist_remove(eid2)
+    check("blacklist remove", removed and removed["id"] == eid2)
+    check("removed entry gone", await db.is_blacklisted(discord_id=2) is None)
+
+    # reminder tracking + saved-code views/exports
+    check("reminder stage default", await db.reminder_stage(1) == 0)
+    await db.set_reminder_stage(1, 2)
+    check("reminder stage set", await db.reminder_stage(1) == 2)
+    await db.record_join(1, "alice")
+    check("rejoin resets reminder", await db.reminder_stage(1) == 0)
+    await db.ensure_member(3, "carol", "2026-01-02 03:04:05")
+    check("ensure_member inserts", await db.reminder_stage(3) == 0)
+    await db.set_reminder_stage(3, 1)
+    check("stage sticks for backfilled member", await db.reminder_stage(3) == 1)
+    await db.ensure_member(3, "carol-renamed")
+    check("ensure_member doesn't clobber existing", (await db.get_member(3))["username"] == "carol")
+    check("saved_codes_count", await db.saved_codes_count() == 1)
+    sc = await db.saved_codes()
+    check("saved_codes row", bool(sc) and sc[0]["friend_code"] == "RANDOMCODE#1234")
+    check("saved_codes indexed flag", sc and sc[0]["indexed"] == 1)
+    check("accounts_for_code", len(await db.accounts_for_code("RANDOMCODE#1234")) == 2)
+    check("export rows", len(await db.export_rows()) == 2)
+
+    # reports
+    rid = await db.report_create(5, "harassment", "was awful", 2, "randomcode#1234", "http://x")
+    rep = await db.report_get(rid)
+    check("report stored", rep and rep["status"] == "pending")
+    check("report target code normalized", rep and rep["target_code"] == "RANDOMCODE#1234")
+    check("pending list", any(r["id"] == rid for r in await db.reports_pending()))
+    await db.report_resolve(rid, "approved", 99)
+    check("report resolved", (await db.report_get(rid))["status"] == "approved")
+    check("no longer pending", all(r["id"] != rid for r in await db.reports_pending()))
+    await db.report_resolve(rid, "rejected", 99)  # must not overwrite a resolved row
+    check("resolved reports are immutable", (await db.report_get(rid))["status"] == "approved")
+
+    await db.audit("TEST", "hello", 7)
+    await db.close()
+    check("db closes cleanly", True)
+
+
+async def cog_tests() -> None:
+    print("cogs / commands:")
+    os.environ.setdefault("DISCORD_TOKEN", "dummy-token-for-import-test")
+    os.environ["DB_PATH"] = os.path.join(tempfile.mkdtemp(), "cogtest.db")
+    from bot import AUVerifyBot
+
+    bot = AUVerifyBot()
+    await bot.db.connect()
+    loaded, errors = [], []
+    for ext in ("cogs.gate", "cogs.setup", "cogs.reports", "cogs.moderation", "cogs.help"):
+        try:
+            await bot.load_extension(ext)
+            loaded.append(ext)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{ext}: {exc!r}")
+    check("all cogs load", not errors)
+    for err in errors:
+        print(f"       {err}")
+
+    names = {cmd.qualified_name for cmd in bot.tree.walk_commands()}
+    for expected in (
+        "setup",
+        "gate-setup",
+        "gate-lock",
+        "verify",
+        "report",
+        "codes",
+        "whois",
+        "nuke",
+        "blacklist",
+        "help",
+    ):
+        check(f"command registered: {expected}", expected in names)
+
+    for ext in loaded:
+        await bot.unload_extension(ext)
+    await bot.db.close()
+
+
+def helper_tests() -> None:
+    print("helpers:")
+    check("mask hides middle", mask_code("RANDOMCODE#1234") == "RAN" + "•" * 10 + "34")
+    check("mask short code", mask_code("AB12") == "AB••")
+
+
+def main() -> int:
+    helper_tests()
+    asyncio.run(db_tests())
+    asyncio.run(cog_tests())
+    print(f"\n{PASS} passed, {FAIL} failed")
+    return 1 if FAIL else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

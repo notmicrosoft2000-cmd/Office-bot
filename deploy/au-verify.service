@@ -1,0 +1,19 @@
+[Unit]
+Description=Among Us friend-code verification Discord bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nept
+WorkingDirectory=/home/nept/au-verify
+EnvironmentFile=/home/nept/au-verify/.env
+ExecStart=/home/nept/au-verify/.venv/bin/python bot.py
+Restart=on-failure
+RestartSec=5
+# Basic hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

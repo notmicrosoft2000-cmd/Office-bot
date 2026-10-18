@@ -1,0 +1,489 @@
+"""Join gate: unverified role, friend-code modal, 'I don't play AU' button, timeout kicks."""
+from __future__ import annotations
+
+import asyncio
+import logging
+import re
+from datetime import datetime, timedelta, timezone
+
+import discord
+from discord import app_commands
+from discord.ext import commands, tasks
+
+from helpers import get_bool_setting, get_roles, load_config, send_audit
+
+log = logging.getLogger("aubot.gate")
+
+
+def _dt(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+class VerifyModal(discord.ui.Modal, title="Among Us verification"):
+    code = discord.ui.TextInput(
+        label="Your friend code",
+        placeholder="e.g. Example#0000",
+        min_length=7,
+        max_length=20,
+        required=True,
+    )
+
+    def __init__(self, bot: commands.Bot) -> None:
+        super().__init__()
+        self.bot = bot
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message("Run this inside the server.", ephemeral=True)
+            return
+
+        db = self.bot.db
+        raw = str(self.code.value).strip()
+        code = "".join(raw.split()).upper()
+
+        if not re.fullmatch(self.bot.settings.fc_pattern, code):
+            await interaction.response.send_message(
+                "That doesn't look like an Among Us friend code. "
+                "It should look like `Example#0000` (from in-game Settings → Account).",
+                ephemeral=True,
+            )
+            return
+
+        cfg = await load_config(self.bot, interaction.guild)
+        roles = get_roles(interaction.guild, cfg)
+
+        # Someone who claimed "I don't play AU" showing up with a code is the
+        # lie we were promised we'd get to punish.
+        prior = await db.get_member(interaction.user.id)
+        if prior and prior["status"] == "nonau":
+            if self.bot.settings.lie_punishment == "ban":
+                await interaction.response.send_message(
+                    "You stated you do not play Among Us, yet you just submitted a "
+                    "friend code. You are being removed from the server.",
+                    ephemeral=True,
+                )
+                await self._audit("LIAR", f"{interaction.user} claimed non-AU then verified")
+                try:
+                    await interaction.user.ban(
+                        reason="Falsified 'I don't play Among Us' gate choice",
+                        delete_message_seconds=0,
+                    )
+                except discord.HTTPException as exc:
+                    log.warning("Liar-ban failed for %s: %s", interaction.user, exc)
+                return
+            if self.bot.settings.lie_punishment == "flag":
+                await self._respond_verified(interaction, code, roles, flagged=True)
+                return
+            # 'off': fall through and just verify them normally.
+
+        # Index lookups: the code itself, this Discord account, and any other
+        # Discord accounts previously linked to the same code (alt detection).
+        linked_ids = await db.discord_ids_for_code(code)
+        hit = (
+            await db.is_blacklisted(friend_code=code)
+            or await db.is_blacklisted(discord_id=interaction.user.id)
+        )
+        if not hit:
+            for alt_id in linked_ids:
+                hit = await db.is_blacklisted(discord_id=alt_id)
+                if hit:
+                    break
+
+        if hit:
+            await interaction.response.send_message(
+                "You cannot be verified in this server.", ephemeral=True
+            )
+            await self._audit(
+                "AUTO-BAN",
+                f"{interaction.user} blocked at verification — index match "
+                f"#{hit['id']} ({hit['kind']}: {hit['value']})",
+            )
+            try:
+                await interaction.user.ban(
+                    reason=f"Blacklisted friend code (index #{hit['id']})",
+                    delete_message_seconds=0,
+                )
+            except discord.HTTPException as exc:
+                log.warning("Auto-ban failed for %s: %s", interaction.user, exc)
+            return
+
+        await db.link_code(code, interaction.user.id)
+        await db.set_status(
+            interaction.user.id, "verified",
+            username=str(interaction.user), friend_code=code,
+        )
+        await self._respond_verified(interaction, code, roles, flagged=False)
+
+    async def _respond_verified(
+        self,
+        interaction: discord.Interaction,
+        code: str,
+        roles: dict[str, discord.Role | None],
+        *,
+        flagged: bool,
+    ) -> None:
+        await interaction.response.send_message(
+            "✅ Verified! Your friend code is linked to this account. "
+            "Welcome aboard.",
+            ephemeral=True,
+        )
+        await self._swap_roles(interaction, roles, "verified")
+        note = " (flagged: lied about not playing AU)" if flagged else ""
+        await self._audit("VERIFY", f"{interaction.user} verified{note}")
+
+    async def _swap_roles(
+        self,
+        interaction: discord.Interaction,
+        roles: dict[str, discord.Role | None],
+        target: str,
+    ) -> None:
+        guild = interaction.guild
+        if guild is None:
+            return
+        member = guild.get_member(interaction.user.id)
+        if member is None:
+            return
+        wanted = roles.get(target)
+        # Option: some servers don't want a separate "verified" badge — just
+        # remove the unverified role and let them inherit @everyone access.
+        if target == "verified" and not await get_bool_setting(
+            self.bot, "give_verified_role", True
+        ):
+            wanted = None
+        to_add = [wanted] if wanted else []
+        to_remove = [
+            r for name, r in roles.items()
+            if r and name != target and r in member.roles
+        ]
+        try:
+            if to_remove:
+                await member.remove_roles(*to_remove, reason="AU gate")
+            if to_add:
+                await member.add_roles(*to_add, reason="AU gate")
+        except discord.Forbidden:
+            await send_audit(
+                self.bot,
+                discord.Embed(
+                    title="⚠️ Role swap failed",
+                    description=f"Missing permissions to move {member.mention}. "
+                    "Check that my top role is above the gate roles.",
+                    color=discord.Color.orange(),
+                ),
+            )
+
+    async def _audit(self, action: str, details: str) -> None:
+        await self.bot.db.audit(action, details)
+        colors = {"VERIFY": discord.Color.green(), "AUTO-BAN": discord.Color.red()}
+        await send_audit(
+            self.bot,
+            discord.Embed(
+                title=action, description=details, color=colors.get(action, discord.Color.blurple())
+            ),
+        )
+
+
+class GateView(discord.ui.View):
+    """Persistent buttons under the gate message."""
+
+    def __init__(self, bot: commands.Bot) -> None:
+        super().__init__(timeout=None)
+        self.bot = bot
+
+    @discord.ui.button(
+        label="I play Among Us",
+        style=discord.ButtonStyle.green,
+        emoji="🚀",
+        custom_id="au_gate:verify",
+    )
+    async def verify(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        await interaction.response.send_modal(VerifyModal(self.bot))
+
+    @discord.ui.button(
+        label="I don't play Among Us",
+        style=discord.ButtonStyle.grey,
+        emoji="🚫",
+        custom_id="au_gate:nonau",
+    )
+    async def nonau(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message("Run this inside the server.", ephemeral=True)
+            return
+        cfg = await load_config(self.bot, interaction.guild)
+        roles = get_roles(interaction.guild, cfg)
+        prior = await self.bot.db.get_member(interaction.user.id)
+        if prior and prior["status"] == "verified" and roles.get("verified"):
+            await interaction.response.send_message(
+                "Your account is already verified with a friend code.", ephemeral=True
+            )
+            return
+
+        await self.bot.db.set_status(
+            interaction.user.id, "nonau", username=str(interaction.user)
+        )
+        await interaction.response.send_message(
+            "Understood — you're marked as a non-player. You'll get access to the "
+            "general channels shortly. Note: if you're later found to actually play "
+            "Among Us, that's grounds for removal.",
+            ephemeral=True,
+        )
+        member = interaction.guild.get_member(interaction.user.id)
+        if member and roles.get("unverified") and roles["unverified"] in member.roles:
+            try:
+                await member.remove_roles(roles["unverified"], reason="AU gate: non-player")
+                if roles.get("nonau"):
+                    await member.add_roles(roles["nonau"], reason="AU gate: non-player")
+            except discord.Forbidden:
+                pass
+        await self.bot.db.audit("NON-AU", f"{interaction.user} declared they don't play AU")
+        await send_audit(
+            self.bot,
+            discord.Embed(
+                title="NON-AU",
+                description=f"{interaction.user} declared they don't play Among Us",
+                color=discord.Color.dark_grey(),
+            ),
+        )
+
+
+class Gate(commands.Cog):
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+        self._view = GateView(bot)
+
+    async def cog_load(self) -> None:
+        self.bot.add_view(self._view)
+
+    async def cog_unload(self) -> None:
+        self.kick_expired.cancel()
+
+    @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        if not self.kick_expired.is_running():
+            self.kick_expired.start()
+        if not self.dm_reminders.is_running():
+            self.dm_reminders.start()
+        log.info(
+            "gate: background tasks running (kick=%s, reminders=%s)",
+            self.kick_expired.is_running(),
+            self.dm_reminders.is_running(),
+        )
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member) -> None:
+        db = self.bot.db
+        await db.record_join(member.id, str(member))
+
+        hit = await db.is_blacklisted(discord_id=member.id)
+        if not hit:
+            # Rejoin by someone whose linked code was blacklisted meanwhile.
+            for code in await db.codes_for_discord(member.id):
+                hit = await db.is_blacklisted(friend_code=code)
+                if hit:
+                    break
+        if hit:
+            await send_audit(
+                self.bot,
+                discord.Embed(
+                    title="AUTO-BAN (join)",
+                    description=f"{member} ({member.id}) matched index #{hit['id']} "
+                    f"on join and was banned.",
+                    color=discord.Color.red(),
+                ),
+            )
+            await db.audit("AUTO-BAN", f"{member} banned on join — index #{hit['id']}")
+            try:
+                await member.ban(
+                    reason=f"Blacklisted on join (index #{hit['id']})",
+                    delete_message_seconds=0,
+                )
+            except discord.HTTPException as exc:
+                log.warning("Join-ban failed for %s: %s", member, exc)
+            return
+
+        cfg = await load_config(self.bot, member.guild)
+        role_id = cfg.get("role_unverified")
+        if role_id and (role := member.guild.get_role(role_id)):
+            try:
+                await member.add_roles(role, reason="AU gate")
+            except discord.Forbidden:
+                log.warning("Could not assign unverified role to %s", member)
+
+        await self._greet_new_member(member, cfg)
+
+    def _intro_dm(
+        self, guild: discord.Guild, verify: discord.abc.GuildChannel | None = None
+    ) -> str:
+        where = f"**#{verify.name}**" if verify is not None else "the verification channel"
+        return (
+            f"👋 Welcome to **{guild.name}**!\n\n"
+            f"Before you can see the rest of the server, verify in {where}:\n"
+            "• **Play Among Us?** Submit your friend code — in-game: **Settings → Account** "
+            "(it looks like `Example#0000`).\n"
+            "• **Don't play?** Just say so and you're through.\n\n"
+            f"You have **{self.bot.settings.gate_hours} hours** to do this, "
+            "or you'll be removed. It takes about 10 seconds."
+        )
+
+    async def _greet_new_member(
+        self, member: discord.Member, cfg: dict[str, int]
+    ) -> None:
+        """DM a new member and drop a short-lived @ping in the gate channel.
+
+        The ping makes sure they get a notification pointing at the gate channel;
+        it's deleted right after so the channel stays clean.
+        """
+        guild = member.guild
+        verify_id = cfg.get("verify_channel_id")
+        verify = guild.get_channel(verify_id) if verify_id else None
+
+        # 1) Welcome DM. Mark stage 1 so the reminder task doesn't immediately re-DM.
+        dm_ok = False
+        try:
+            await member.send(self._intro_dm(guild, verify))
+            await self.bot.db.set_reminder_stage(member.id, 1)
+            dm_ok = True
+        except discord.HTTPException as exc:
+            log.info("greet: DM to %s failed (%s); relying on the ping", member, exc)
+
+        # 2) Ping in the gate channel, then delete it.
+        pinged = False
+        if isinstance(verify, discord.TextChannel):
+            try:
+                ping = await verify.send(
+                    f"{member.mention} 👋 welcome! Please verify here — "
+                    "this message will disappear in a moment."
+                )
+                pinged = True
+            except discord.HTTPException as exc:
+                log.info("greet: ping in %s failed (%s)", verify, exc)
+            else:
+                await asyncio.sleep(3)
+                try:
+                    await ping.delete()
+                except discord.HTTPException:
+                    pass
+        log.info("greet: %s — dm=%s ping=%s", member, dm_ok, pinged)
+
+    @tasks.loop(minutes=10)
+    async def kick_expired(self) -> None:
+        """Kick members who never verified within GATE_HOURS of joining."""
+        deadline = datetime.now(timezone.utc) - timedelta(hours=self.bot.settings.gate_hours)
+        for guild in self.bot.guilds:
+            cfg = await load_config(self.bot, guild)
+            role = guild.get_role(cfg["role_unverified"]) if "role_unverified" in cfg else None
+            if role is None:
+                continue
+            for member in list(role.members):
+                if member.bot or member.joined_at is None or member.joined_at > deadline:
+                    continue
+                try:
+                    await member.send(
+                        f"You didn't verify an Among Us friend code (or declare that you "
+                        f"don't play) within {self.bot.settings.gate_hours} hours, "
+                        "so you've been removed. Rejoin to try again."
+                    )
+                except discord.HTTPException:
+                    pass
+                try:
+                    await member.kick(reason="AU gate: verification timeout")
+                    await self.bot.db.audit("KICK", f"{member} kicked — gate timeout")
+                    await send_audit(
+                        self.bot,
+                        discord.Embed(
+                            title="GATE TIMEOUT",
+                            description=f"{member} kicked for not verifying in "
+                            f"{self.bot.settings.gate_hours}h",
+                            color=discord.Color.orange(),
+                        ),
+                    )
+                except discord.HTTPException as exc:
+                    log.warning("Gate kick failed for %s: %s", member, exc)
+
+    @kick_expired.before_loop
+    async def before_kick_expired(self) -> None:
+        await self.bot.wait_until_ready()
+
+    @tasks.loop(minutes=30)
+    async def dm_reminders(self) -> None:
+        """DM unverified members: a welcome nudge, a half-time reminder, then a final warning."""
+        if not await get_bool_setting(self.bot, "dm_reminders", True):
+            return
+        gate_hours = self.bot.settings.gate_hours
+        now = datetime.now(timezone.utc)
+        log.info("dm_reminders: scanning %d guild(s)", len(self.bot.guilds))
+        for guild in self.bot.guilds:
+            cfg = await load_config(self.bot, guild)
+            role = guild.get_role(cfg["role_unverified"]) if "role_unverified" in cfg else None
+            if role is None:
+                log.info("dm_reminders: no unverified role configured/found in %s", guild)
+                continue
+            log.info(
+                "dm_reminders: %s has %d member(s) with %s",
+                guild, len(role.members), role.name,
+            )
+            verify_id = cfg.get("verify_channel_id")
+            verify = guild.get_channel(verify_id) if verify_id else None
+            for member in list(role.members):
+                if member.bot or member.joined_at is None:
+                    continue
+                # People can carry the role without ever being recorded (joined while
+                # the bot was offline). Backfill so reminder stages actually stick.
+                await self.bot.db.ensure_member(
+                    member.id,
+                    str(member),
+                    member.joined_at.strftime("%Y-%m-%d %H:%M:%S"),
+                )
+                expires = member.joined_at + timedelta(hours=gate_hours)
+                remaining = (expires - now).total_seconds() / 3600
+                if remaining <= 0:
+                    continue  # the kick task handles this
+                stage = await self.bot.db.reminder_stage(member.id)
+                body: str | None = None
+                if stage == 0:
+                    # Catches members who were already unverified before this existed.
+                    body = self._intro_dm(guild, verify)
+                    stage = 1
+                elif stage == 1 and remaining <= gate_hours / 2:
+                    body = (
+                        f"⏳ Heads up — you haven't verified in **{guild.name}** yet. "
+                        f"You have about **{int(remaining)}h** left before you're removed. "
+                        "Head to the verification channel and either submit your Among Us "
+                        "friend code or say *I don't play Among Us*."
+                    )
+                    stage = 2
+                elif stage == 2 and remaining <= 6:
+                    body = (
+                        f"⚠️ Last call — about **{int(remaining)}h** left to verify in "
+                        f"**{guild.name}**, or you'll be kicked. It takes 10 seconds."
+                    )
+                    stage = 3
+                if body is None:
+                    continue
+                try:
+                    await member.send(body)
+                    log.info("dm_reminders: DM sent to %s (stage %d)", member, stage)
+                except discord.HTTPException as exc:
+                    # DMs closed — still advance the stage so we don't retry every loop.
+                    log.info("dm_reminders: DM to %s failed: %s", member, exc)
+                await self.bot.db.set_reminder_stage(member.id, stage)
+
+    @dm_reminders.before_loop
+    async def before_dm_reminders(self) -> None:
+        await self.bot.wait_until_ready()
+
+    # -- setup -------------------------------------------------------------
+    @app_commands.command(name="verify", description="Open the friend-code verification form")
+    async def verify_cmd(self, interaction: discord.Interaction) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message("Run this inside the server.", ephemeral=True)
+            return
+        await interaction.response.send_modal(VerifyModal(self.bot))
+
+
+async def setup(bot: commands.Bot) -> None:
+    await bot.add_cog(Gate(bot))

@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sqlite3
 import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db import Database  # noqa: E402
-from helpers import mask_code  # noqa: E402
+from helpers import is_app_account, mask_code  # noqa: E402
 from cogs.reports import REASONS, normalize_code, reason_label  # noqa: E402
 
 PASS, FAIL = 0, 0
@@ -82,6 +83,12 @@ async def db_tests() -> None:
     check("ensure_member inserts", await db.reminder_stage(3) == 0)
     await db.set_reminder_stage(3, 1)
     check("stage sticks for backfilled member", await db.reminder_stage(3) == 1)
+    check("last_dm starts empty", await db.last_dm(3) is None)
+    await db.set_last_dm(3)
+    check("last_dm stamped", await db.last_dm(3) is not None)
+    await db.record_join(3, "carol")
+    check("rejoin clears last_dm", await db.last_dm(3) is None)
+    check("rejoin resets the stage", await db.reminder_stage(3) == 0)
     await db.ensure_member(3, "carol-renamed")
     check("ensure_member doesn't clobber existing", (await db.get_member(3))["username"] == "carol")
     check("saved_codes_count", await db.saved_codes_count() == 1)
@@ -120,6 +127,31 @@ async def db_tests() -> None:
     check("db closes cleanly", True)
 
 
+async def migration_tests() -> None:
+    print("migrations:")
+    path = os.path.join(tempfile.mkdtemp(), "old.db")
+    con = sqlite3.connect(path)
+    # A members table as it looked before reminder_stage/last_dm_at existed.
+    con.execute(
+        "CREATE TABLE members (discord_id INTEGER PRIMARY KEY, username TEXT NOT NULL, "
+        "friend_code TEXT, status TEXT NOT NULL DEFAULT 'unverified', "
+        "joined_at TEXT NOT NULL DEFAULT (datetime('now')), verified_at TEXT, "
+        "last_username TEXT)"
+    )
+    con.commit()
+    con.close()
+
+    db = Database(path)
+    await db.connect()
+    cur = await db.db.execute("PRAGMA table_info(members)")
+    cols = {row["name"] for row in await cur.fetchall()}
+    check("migration adds reminder_stage", "reminder_stage" in cols)
+    check("migration adds last_dm_at", "last_dm_at" in cols)
+    await db.set_status(1, "app", username="SomeApp#0001")
+    check("app status persists", (await db.get_member(1))["status"] == "app")
+    await db.close()
+
+
 async def cog_tests() -> None:
     print("cogs / commands:")
     os.environ.setdefault("DISCORD_TOKEN", "dummy-token-for-import-test")
@@ -127,6 +159,8 @@ async def cog_tests() -> None:
     from bot import AUVerifyBot
 
     bot = AUVerifyBot()
+    check("reminder repeat default is 12h", bot.settings.reminder_repeat_hours == 12)
+    check("gate schedule default is 48h", bot.settings.gate_hours == 48)
     await bot.db.connect()
     loaded, errors = [], []
     for ext in (
@@ -170,6 +204,23 @@ async def cog_tests() -> None:
 
 def helper_tests() -> None:
     print("helpers:")
+
+    class _U:
+        """Duck-typed user for is_app_account."""
+
+        def __init__(self, name: str, disc: str = "0", bot: bool = False) -> None:
+            self.name, self.discriminator, self.bot, self.system = name, disc, bot, False
+
+        def __str__(self) -> str:
+            return self.name if self.discriminator == "0" else f"{self.name}#{self.discriminator}"
+
+    check("app: legacy Name#1234 username", is_app_account(_U("Ballsdex", "0677")))
+    check("app: bot flag", is_app_account(_U("HelperBot", "0", bot=True)))
+    check("app: legacy shape without discriminator field", is_app_account(_U("SomeApp#0001")))
+    check("not app: modern username", not is_app_account(_U("junaid_43664")))
+    check("not app: name with digits", not is_app_account(_U("sniper_123_29245")))
+    check("not app: real friend code as name", not is_app_account(_U("MERRYFROST")))
+
     check("mask hides middle", mask_code("RANDOMCODE#1234") == "RAN" + "•" * 10 + "34")
     check("mask short code", mask_code("AB12") == "AB••")
     check("normalize_code strips + uppercases", normalize_code(" ex ample#0000 ") == "EXAMPLE#0000")
@@ -181,6 +232,7 @@ def helper_tests() -> None:
 def main() -> int:
     helper_tests()
     asyncio.run(db_tests())
+    asyncio.run(migration_tests())
     asyncio.run(cog_tests())
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

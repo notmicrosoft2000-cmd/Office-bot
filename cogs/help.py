@@ -20,7 +20,7 @@ class Help(commands.Cog):
         )
         embed.add_field(
             name="1) New joiners hit the gate",
-            value="They get `AU Unverified` and can see **only** the verify channel (the bot locks every other channel away from them). They must either submit their Among Us friend code (permanent, unchangeable), or click **I don't play Among Us** within the timeout (48h by default), or get kicked. The bot DMs them a halfway reminder and a final warning before the deadline.",
+            value="They get `AU Unverified` and can see **only** the verify channel (the bot locks every other channel away from them). They must either submit their Among Us friend code (permanent, unchangeable) or click **I don't play Among Us**. Nobody is kicked for taking their time — the bot nudges them by DM (intro, halfway, final, then periodically) until they act. Community apps (bot accounts and `Name#1234` usernames) are skipped entirely.",
             inline=False,
         )
         embed.add_field(
@@ -58,7 +58,10 @@ class Help(commands.Cog):
             value="No official Among Us API, so we can't prove ownership — we validate format and record the claim. Treat evidence carefully; mod approval is the safeguard.",
             inline=False,
         )
-        embed.set_footer(text=f"Timeout: {self.bot.settings.gate_hours}h • LIE_PUNISHMENT: {self.bot.settings.lie_punishment}")
+        embed.set_footer(
+            text=f"Reminders: {self.bot.settings.gate_hours}h schedule, then every "
+            f"{self.bot.settings.reminder_repeat_hours}h • LIE_PUNISHMENT: {self.bot.settings.lie_punishment}"
+        )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 

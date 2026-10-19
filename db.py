@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS members (
     joined_at      TEXT NOT NULL DEFAULT (datetime('now')),
     verified_at    TEXT,
     reminder_stage INTEGER NOT NULL DEFAULT 0,
+    last_dm_at     TEXT,
     last_username  TEXT
 );
 
@@ -95,6 +96,8 @@ class Database:
             await self._db.execute(
                 "ALTER TABLE members ADD COLUMN reminder_stage INTEGER NOT NULL DEFAULT 0"
             )
+        if "last_dm_at" not in columns:
+            await self._db.execute("ALTER TABLE members ADD COLUMN last_dm_at TEXT")
 
     async def close(self) -> None:
         if self._db is not None:
@@ -135,7 +138,7 @@ class Database:
             "INSERT INTO members(discord_id, username) VALUES(?,?) "
             "ON CONFLICT(discord_id) DO UPDATE SET "
             "  last_username=excluded.username, joined_at=datetime('now'), "
-            "  reminder_stage=0",
+            "  reminder_stage=0, last_dm_at=NULL",
             (discord_id, username),
         )
         await self.db.commit()
@@ -193,6 +196,21 @@ class Database:
             "UPDATE members SET reminder_stage=? WHERE discord_id=?", (stage, discord_id)
         )
         await self.db.commit()
+
+    async def set_last_dm(self, discord_id: int) -> None:
+        """Stamp the last reminder DM, successful or not (it throttles retries)."""
+        await self.db.execute(
+            "UPDATE members SET last_dm_at=datetime('now') WHERE discord_id=?",
+            (discord_id,),
+        )
+        await self.db.commit()
+
+    async def last_dm(self, discord_id: int) -> str | None:
+        cur = await self.db.execute(
+            "SELECT last_dm_at FROM members WHERE discord_id=?", (discord_id,)
+        )
+        row = await cur.fetchone()
+        return row["last_dm_at"] if row else None
 
     async def reminder_stage(self, discord_id: int) -> int:
         cur = await self.db.execute(

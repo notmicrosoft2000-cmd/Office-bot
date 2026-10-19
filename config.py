@@ -21,7 +21,11 @@ class Settings:
     token: str
     guild_id: int | None
     db_path: str
+    # How long a new member has to act before the reminder escalations land.
+    # Nothing is ever kicked for timing out: the bot just keeps nudging.
     gate_hours: int
+    # After the final reminder, how often to nudge unverified members again.
+    reminder_repeat_hours: int
     fc_pattern: str
     log_level: str
     # What to do when someone who clicked "I don't play Among Us" submits a code:
@@ -58,6 +62,7 @@ def load_settings() -> Settings:
         guild_id=_int_or_none(os.getenv("GUILD_ID", "").strip()),
         db_path=os.getenv("DB_PATH", "data/au_verify.db"),
         gate_hours=int(os.getenv("GATE_HOURS", "48")),
+        reminder_repeat_hours=int(os.getenv("REMINDER_REPEAT_HOURS", "12")),
         fc_pattern=os.getenv("FC_PATTERN", DEFAULT_FC_PATTERN),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         lie_punishment=lie,

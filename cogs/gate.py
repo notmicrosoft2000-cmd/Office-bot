@@ -1,4 +1,9 @@
-"""Join gate: unverified role, friend-code modal, 'I don't play AU' button, timeout kicks."""
+"""Join gate: unverified role, friend-code modal, 'I don't play AU' button, reminders.
+
+There is no timeout kick any more: members who never verify stay locked out but
+keep getting reminder DMs until they act. Community apps (`Name#1234` legacy
+usernames) are skipped entirely.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -10,7 +15,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from helpers import get_bool_setting, get_roles, load_config, send_audit
+from helpers import get_bool_setting, get_roles, is_app_account, load_config, send_audit
 
 log = logging.getLogger("aubot.gate")
 
@@ -259,23 +264,27 @@ class Gate(commands.Cog):
         self.bot.add_view(self._view)
 
     async def cog_unload(self) -> None:
-        self.kick_expired.cancel()
+        self.dm_reminders.cancel()
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        if not self.kick_expired.is_running():
-            self.kick_expired.start()
         if not self.dm_reminders.is_running():
             self.dm_reminders.start()
-        log.info(
-            "gate: background tasks running (kick=%s, reminders=%s)",
-            self.kick_expired.is_running(),
-            self.dm_reminders.is_running(),
-        )
+        log.info("gate: reminder task running=%s", self.dm_reminders.is_running())
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member) -> None:
         db = self.bot.db
+
+        # Bots and community apps arrive with legacy `Name#1234` usernames. They
+        # have nothing to verify and would sit at the gate forever, so they are
+        # recorded for the stats but never gated, reminded or kicked.
+        if is_app_account(member):
+            await db.set_status(member.id, "app", username=str(member))
+            await db.audit("APP", f"{member} skipped the gate — app account")
+            log.info("on_member_join: %s is an app account, gate skipped", member)
+            return
+
         await db.record_join(member.id, str(member))
 
         hit = await db.is_blacklisted(discord_id=member.id)
@@ -321,12 +330,12 @@ class Gate(commands.Cog):
         where = f"**#{verify.name}**" if verify is not None else "the verification channel"
         return (
             f"👋 Welcome to **{guild.name}**!\n\n"
-            f"Before you can see the rest of the server, verify in {where}:\n"
+            f"You're locked out of the rest of the server until you verify in {where}:\n"
             "• **Play Among Us?** Submit your friend code — in-game: **Settings → Account** "
             "(it looks like `Example#0000`).\n"
             "• **Don't play?** Just say so and you're through.\n\n"
-            f"You have **{self.bot.settings.gate_hours} hours** to do this, "
-            "or you'll be removed. It takes about 10 seconds."
+            "It takes about 10 seconds. There's no deadline — we'll just keep "
+            "reminding you until you do."
         )
 
     async def _greet_new_member(
@@ -369,48 +378,9 @@ class Gate(commands.Cog):
                     pass
         log.info("greet: %s — dm=%s ping=%s", member, dm_ok, pinged)
 
-    @tasks.loop(minutes=10)
-    async def kick_expired(self) -> None:
-        """Kick members who never verified within GATE_HOURS of joining."""
-        deadline = datetime.now(timezone.utc) - timedelta(hours=self.bot.settings.gate_hours)
-        for guild in self.bot.guilds:
-            cfg = await load_config(self.bot, guild)
-            role = guild.get_role(cfg["role_unverified"]) if "role_unverified" in cfg else None
-            if role is None:
-                continue
-            for member in list(role.members):
-                if member.bot or member.joined_at is None or member.joined_at > deadline:
-                    continue
-                try:
-                    await member.send(
-                        f"You didn't verify an Among Us friend code (or declare that you "
-                        f"don't play) within {self.bot.settings.gate_hours} hours, "
-                        "so you've been removed. Rejoin to try again."
-                    )
-                except discord.HTTPException:
-                    pass
-                try:
-                    await member.kick(reason="AU gate: verification timeout")
-                    await self.bot.db.audit("KICK", f"{member} kicked — gate timeout")
-                    await send_audit(
-                        self.bot,
-                        discord.Embed(
-                            title="GATE TIMEOUT",
-                            description=f"{member} kicked for not verifying in "
-                            f"{self.bot.settings.gate_hours}h",
-                            color=discord.Color.orange(),
-                        ),
-                    )
-                except discord.HTTPException as exc:
-                    log.warning("Gate kick failed for %s: %s", member, exc)
-
-    @kick_expired.before_loop
-    async def before_kick_expired(self) -> None:
-        await self.bot.wait_until_ready()
-
     @tasks.loop(minutes=30)
     async def dm_reminders(self) -> None:
-        """DM unverified members: a welcome nudge, a half-time reminder, then a final warning."""
+        """Nudge unverified members: intro, half-time, final, then on a repeat timer."""
         if not await get_bool_setting(self.bot, "dm_reminders", True):
             return
         gate_hours = self.bot.settings.gate_hours
@@ -429,7 +399,7 @@ class Gate(commands.Cog):
             verify_id = cfg.get("verify_channel_id")
             verify = guild.get_channel(verify_id) if verify_id else None
             for member in list(role.members):
-                if member.bot or member.joined_at is None:
+                if is_app_account(member) or member.joined_at is None:
                     continue
                 # People can carry the role without ever being recorded (joined while
                 # the bot was offline). Backfill so reminder stages actually stick.
@@ -440,8 +410,6 @@ class Gate(commands.Cog):
                 )
                 expires = member.joined_at + timedelta(hours=gate_hours)
                 remaining = (expires - now).total_seconds() / 3600
-                if remaining <= 0:
-                    continue  # the kick task handles this
                 stage = await self.bot.db.reminder_stage(member.id)
                 body: str | None = None
                 if stage == 0:
@@ -450,18 +418,30 @@ class Gate(commands.Cog):
                     stage = 1
                 elif stage == 1 and remaining <= gate_hours / 2:
                     body = (
-                        f"⏳ Heads up — you haven't verified in **{guild.name}** yet. "
-                        f"You have about **{int(remaining)}h** left before you're removed. "
+                        f"⏳ Heads up — you're still unverified in **{guild.name}**. "
                         "Head to the verification channel and either submit your Among Us "
                         "friend code or say *I don't play Among Us*."
                     )
                     stage = 2
                 elif stage == 2 and remaining <= 6:
                     body = (
-                        f"⚠️ Last call — about **{int(remaining)}h** left to verify in "
-                        f"**{guild.name}**, or you'll be kicked. It takes 10 seconds."
+                        f"⚠️ You're still locked out of the rest of **{guild.name}**. "
+                        "Verifying takes about 10 seconds — submit your friend code, "
+                        "or say you don't play Among Us."
                     )
                     stage = 3
+                elif stage >= 3:
+                    # Nothing is ever kicked for timing out, so keep nudging until
+                    # they act or leave — at most once every REMINDER_REPEAT_HOURS.
+                    repeat = self.bot.settings.reminder_repeat_hours
+                    last_dm = _dt(await self.bot.db.last_dm(member.id))
+                    if last_dm is not None and (now - last_dm) < timedelta(hours=repeat):
+                        continue
+                    body = (
+                        f"🔁 Friendly nudge — you're still unverified in **{guild.name}**. "
+                        "Submit your Among Us friend code (or say you don't play) and "
+                        "you'll get the rest of the server. We'll keep checking in."
+                    )
                 if body is None:
                     continue
                 try:
@@ -471,6 +451,7 @@ class Gate(commands.Cog):
                     # DMs closed — still advance the stage so we don't retry every loop.
                     log.info("dm_reminders: DM to %s failed: %s", member, exc)
                 await self.bot.db.set_reminder_stage(member.id, stage)
+                await self.bot.db.set_last_dm(member.id)
 
     @dm_reminders.before_loop
     async def before_dm_reminders(self) -> None:

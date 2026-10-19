@@ -1,6 +1,8 @@
 """Shared helpers for cogs."""
 from __future__ import annotations
 
+import re
+
 import discord
 
 SETTINGS_KEYS = (
@@ -10,6 +12,22 @@ SETTINGS_KEYS = (
     "role_unverified",
     "role_nonau",
 )
+
+# Community bots/apps join with Discord's legacy `Name#1234` usernames. They
+# have nothing to verify and would sit at the gate forever, so the bot leaves
+# them alone. Human accounts on the new username system never match this.
+_LEGACY_NAME = re.compile(r"^[^#]{1,32}#[0-9]{4}$")
+
+
+def is_app_account(member: discord.abc.User) -> bool:
+    """True for bot accounts and for legacy `Name#1234` usernames (apps)."""
+    if getattr(member, "bot", False):
+        return True
+    if getattr(member, "system", False):
+        return True
+    if getattr(member, "discriminator", "0") not in ("0", "", None):
+        return True
+    return bool(_LEGACY_NAME.match(str(member)))
 
 
 async def load_config(bot, guild: discord.Guild) -> dict[str, int]:

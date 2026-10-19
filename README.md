@@ -14,7 +14,11 @@ useful ban-evasion tripwire.
 
 - **Hard join gate** — new members get an `AU Unverified` role and can only see
   the verification channel. They must either submit a friend code or declare
-  they don't play Among Us, within `GATE_HOURS` (default 48), or they're kicked.
+  they don't play Among Us. Nobody is kicked for taking too long: the bot DMs
+  them an intro, a halfway nudge, a final one, then keeps nudging every
+  `REMINDER_REPEAT_HOURS` (default 12) until they act or leave.
+- **Apps are skipped** — bot accounts, and anyone with a legacy `Name#1234`
+  username (community apps), are never gated, reminded or kicked.
 - **Friend-code capture** — `/verify` (or the gate button) opens a modal. The
   code is validated by format, normalised to uppercase, and stored.
 - **Index / blacklist** — a SQLite index of `friend_code` and `discord_id`
@@ -32,7 +36,7 @@ useful ban-evasion tripwire.
   describe what happened and attach evidence. It lands in the report channel
   with **Approve → blacklist** / **Reject** buttons. Only approved reports enter
   the index. Pending reports survive restarts.
-- **Audit trail** — every verify, ban, blacklist change and gate kick is written
+- **Audit trail** — every verify, ban, blacklist change and gate skip is written
   to the `audit_log` table and (if configured) posted to the log channel.
 
 ## Commands
@@ -60,7 +64,7 @@ bot.py            entrypoint, intents, slash-command sync
 config.py         env config (token, gate hours, FC regex, lie punishment)
 db.py            aiosqlite persistence + schema (SQLite, WAL)
 helpers.py        settings lookup, role resolution, masking, audit posting
-cogs/gate.py      join event, gate view/modal, non-AU button, timeout kick task
+cogs/gate.py      join event, gate view/modal, non-AU button, reminder task
 cogs/reports.py   /report modal, mod review buttons, blacklist-on-approve
 cogs/moderation.py /blacklist, /whois, /nuke
 cogs/info.py      /ping, /stats, the heartbeat file the watchdog watches
@@ -115,7 +119,8 @@ tests/smoke.py    DB + command-registration tests (no token needed)
 | `DISCORD_TOKEN` | — | Required |
 | `GUILD_ID` | — | Optional; instant command sync to one guild |
 | `DB_PATH` | `data/au_verify.db` | SQLite file |
-| `GATE_HOURS` | `48` | Time to verify before kick |
+| `GATE_HOURS` | `48` | Reminder schedule: halfway nudge at half, final at the end |
+| `REMINDER_REPEAT_HOURS` | `12` | How often to keep nudging after the final reminder |
 | `LIE_PUNISHMENT` | `ban` | `ban` / `flag` / `off` |
 | `FC_PATTERN` | `^[A-Za-z]{2,16}#[0-9]{4}$` | Override if Innersloth changes the format |
 | `LOG_LEVEL` | `INFO` | |

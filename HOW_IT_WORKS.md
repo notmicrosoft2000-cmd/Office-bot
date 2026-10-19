@@ -4,7 +4,7 @@ The bot prevents known bad Among Us players from slipping back in. It uses **fri
 
 ## Core ideas
 
-- **Join gate**: New members only see `#verify`. They must pick one of two options (submit friend code, or say "I don't play Among Us") within 48 hours, or they get kicked. On join they get a **welcome DM** and a **brief @ping in the gate channel** (that ping message is deleted right after so the channel stays clean). They also get a **reminder DM** halfway through and a **final warning** ~6h before the deadline (all toggleable).
+- **Join gate**: New members only see `#verify` and must pick one of two options (submit a friend code, or say "I don't play Among Us"). **Nothing is kicked for timing out** — the bot nudges them by DM (welcome, halfway, final, then every `REMINDER_REPEAT_HOURS`, default 12h) until they act or leave. On join they also get a **brief @ping in the gate channel** (that ping message is deleted right after so the channel stays clean). **Bots and `Name#1234` app accounts are skipped entirely** — they have nothing to verify.
 - **Index (blacklist)**: A shared list of `friend_code` and/or `discord_id`. If anyone on that list joins or tries to verify, they're **banned immediately**.
 - **Alt detection**: Every time someone verifies with a friend code, the bot links that code → that Discord account. If that code ever gets indexed, **every Discord account that ever used that code** is also banned. This catches alt accounts.
 - **Verified role is optional**: On success the bot normally gives `AU Verified` and removes `AU Unverified`. Admins can turn the role grant off so verified members just lose the unverified role. `I don't play AU` members get `AU Non-Player`.

@@ -67,12 +67,12 @@
             <fieldset>
               <legend>What it does</legend>
               <ul>
-                <li><strong>Join gate</strong> — new members get an <code>AU Unverified</code> role and can only see the verify channel until they pass.</li>
+                <li><strong>Join gate</strong> — new members get an <code>AU Unverified</code> role and can only see the verify channel until they pass. Bots and community apps (usernames like <code>Name#1234</code>) are left alone.</li>
                 <li><strong>Friend-code capture</strong> — a code is checked for the right format, normalised, and stored, linked to the account that sent it.</li>
                 <li><strong>Moderator-approved index</strong> — a list of friend codes and Discord IDs tied to reported misconduct. Only reports a moderator approves are added.</li>
                 <li><strong>Ban-evasion detection</strong> — if a code is indexed, <em>every</em> Discord account ever linked to it is banned on sight.</li>
                 <li><strong>Opt-out</strong> — members who genuinely don't play Among Us can say so instead of verifying.</li>
-                <li><strong>Reminder DMs</strong> — a friendly nudge at the start, halfway point, and final deadline.</li>
+                <li><strong>Reminder DMs</strong> — a friendly nudge at the start, halfway, and one more at the end, then periodically after that. Nobody is removed for taking their time.</li>
                 <li><strong>Self-monitoring</strong> — the bot writes a heartbeat every minute, and an external watchdog alerts moderators if it dies or its event loop stops responding.</li>
               </ul>
             </fieldset>
@@ -93,10 +93,11 @@
               <li>Rather not play? Choose <em>“I don't play Among Us”</em> and you're let through as a non-player.</li>
             </ol>
 
-            <h2>If you don't verify in time</h2>
+            <h2>If you take a while</h2>
             <p>
-              Office Bot DMs you a reminder at the start, halfway, and at the final deadline.
-              Miss all three and you're removed from the server so it can be rejoined later.
+              There's no deadline. Office Bot DMs you a nudge at the start, halfway, and one more
+              at the end, then keeps checking in periodically until you verify or leave. You stay
+              locked out of the rest of the server until then, but you're never removed for it.
             </p>
 
             <h2>Reporting a friend code</h2>

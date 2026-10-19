@@ -4,12 +4,14 @@
 Run from a systemd timer (see ``au-verify-watchdog.timer``). Deliberately
 standard-library only: if the virtualenv is broken, the watchdog still runs.
 
-The bot is considered unhealthy when either:
+The bot is considered unhealthy when any of these is true:
 
 * ``systemctl --user is-active au-verify`` is not ``active``, or
 * the heartbeat file the bot rewrites every minute is older than
   ``WATCHDOG_STALE_SECONDS`` (default 600). This second check is the point —
-  ``Restart=on-failure`` cannot see a process that is alive but stuck.
+  ``Restart=on-failure`` cannot see a process that is alive but stuck, or
+* the bot is in **zero guilds** — it was kicked, so the process is healthy but
+  every command and the join gate have vanished.
 
 Alerts go to the first target that is configured:
 
@@ -173,18 +175,48 @@ def restart_service() -> None:
         log(f"restart failed: {exc!r}")
 
 
+def guild_count() -> int | None:
+    """How many servers the bot is currently in, or None if we can't tell.
+
+    Zero guilds is the failure the heartbeat cannot see: the process is alive
+    and the event loop is fine, but the bot was kicked and every command and
+    gate silently disappeared. Returns None on any network/API problem so a
+    Discord hiccup never raises a false alarm.
+    """
+    token = (os.environ.get("DISCORD_TOKEN") or "").strip()
+    if not token:
+        return None
+    req = urllib.request.Request(
+        "https://discord.com/api/v10/users/@me/guilds",
+        headers={"Authorization": f"Bot {token}", "User-Agent": USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return len(json.load(resp))
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
 def main() -> int:
     host = socket.gethostname()
     now = datetime.now(timezone.utc)
 
     problems: list[str] = []
-    if not service_active():
+    active = service_active()
+    if not active:
         problems.append(f"service `{SERVICE}` is not active")
     age = heartbeat_age()
     if age is None:
         problems.append("no heartbeat file — the bot has never reported in")
     elif age > STALE_SECONDS:
         problems.append(f"heartbeat is {human(age)} old (limit {human(STALE_SECONDS)})")
+    if active:
+        guilds = guild_count()
+        if guilds == 0:
+            problems.append(
+                "the bot is not in any server — it was kicked or never invited, "
+                "so every command and gate is gone (re-invite it)"
+            )
 
     healthy = not problems
     previous = read_state()

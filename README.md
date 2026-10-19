@@ -202,7 +202,7 @@ for when it's back on the network:
 
 ```bash
 # 1. Copy the project (no .venv, no .env)
-rsync -av --exclude .venv --exclude data --exclude '__pycache__' \
+rsync -av --exclude .venv --exclude .env --exclude data --exclude '__pycache__' \
   ./ nept@192.168.99.57:~/au-verify/
 
 # 2. On the server: create the venv and env file

@@ -28,7 +28,7 @@ COGS = (
 class AUVerifyBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
-        intents.members = True  # required: join gate + ban-on-join lookups
+        intents.members = True  # required: join gate + index lookups
         super().__init__(command_prefix=commands.when_mentioned, intents=intents)
         self.settings = load_settings()
         self.db = Database(self.settings.db_path)
@@ -37,14 +37,34 @@ class AUVerifyBot(commands.Bot):
         await self.db.connect()
         for cog in COGS:
             await self.load_extension(cog)
+        # Command sync must never be fatal. If the bot was kicked from the guild
+        # (or has not been invited yet) Discord answers 403/404 here, and dying
+        # in setup_hook would just put the service into a restart loop.
         if self.settings.guild_id:
-            guild = discord.Object(id=self.settings.guild_id)
+            await self._sync_to_guild(discord.Object(id=self.settings.guild_id))
+        else:
+            try:
+                await self.tree.sync()
+                log.info("Synced app commands globally")
+            except discord.HTTPException as exc:
+                log.warning("Global command sync failed: %s", exc)
+
+    async def _sync_to_guild(self, guild: discord.Guild | discord.Object) -> None:
+        try:
             self.tree.copy_global_to(guild=guild)
             await self.tree.sync(guild=guild)
-            log.info("Synced app commands to guild %s", self.settings.guild_id)
-        else:
-            await self.tree.sync()
-            log.info("Synced app commands globally")
+            log.info("Synced app commands to guild %s", guild.id)
+        except discord.HTTPException as exc:
+            log.warning(
+                "Command sync to guild %s failed (%s). Is the bot still in that "
+                "server? It will retry when it is re-invited.",
+                guild.id,
+                exc,
+            )
+
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        # Freshly re-invited: bind the slash commands to that guild right away.
+        await self._sync_to_guild(guild)
 
     async def close(self) -> None:
         await self.db.close()

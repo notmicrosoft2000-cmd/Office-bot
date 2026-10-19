@@ -22,21 +22,25 @@ useful ban-evasion tripwire.
 - **Friend-code capture** — `/verify` (or the gate button) opens a modal. The
   code is validated by format, normalised to uppercase, and stored.
 - **Index / blacklist** — a SQLite index of `friend_code` and `discord_id`
-  entries. Anyone indexed is **banned on sight**: on join, on verification, and
-  retroactively at the moment they're added (`/blacklist add`, `/nuke`).
+  entries. **Nothing is ever banned automatically.** An indexed account that
+  joins or verifies is *flagged for moderator review*: the member is warned by
+  DM, `#mod-logs` gets an alert, and `/suspect list` shows who is waiting on a
+  human decision. Indexing retroactively (`/blacklist add`, `/nuke`) flags the
+  accounts that are present the same way.
 - **Alt detection** — every friend code is linked to every Discord account it
-  has ever been verified with. If the code is indexed, *all* linked accounts
-  are banned, not just the one reported.
+  has ever been verified with. If the code is indexed, *all* linked accounts are
+  flagged, not just the one reported, so the alt network is visible to mods.
 - **"I don't play Among Us"** — one grey button. It passes the gate, but if a
   member who chose it later submits a code, `LIE_PUNISHMENT` decides what
-  happens: `ban` (default), `flag` (verify + loudly notify mods), or `off`.
+  happens: `warn` (default — verify + DM them + flag for review), `flag` (verify
+  + flag, mods only), or `off`. There is no `ban` option.
 - **Mod review queue** — `/report` reports an Among Us **friend code**
   (`Example#0000`): pick a reason (predatory behaviour, inappropriate sexual
   behaviour, harassment, hate speech, scamming, ban evasion, other), then
   describe what happened and attach evidence. It lands in the report channel
   with **Approve → blacklist** / **Reject** buttons. Only approved reports enter
   the index. Pending reports survive restarts.
-- **Audit trail** — every verify, ban, blacklist change and gate skip is written
+- **Audit trail** — every verify, flag, index change and gate skip is written
   to the `audit_log` table and (if configured) posted to the log channel.
 
 ## Commands
@@ -48,11 +52,13 @@ useful ban-evasion tripwire.
 | `/verify` | Anyone | Re-opens the friend-code modal |
 | `/report` | Anyone | Report a friend code (`Example#0000`) + reason into the mod queue |
 | `/codes` | Mod | View every saved friend code (+ linked accounts), or export a CSV |
-| `/blacklist add` | Mod | Index a friend code and/or user + ban them if present |
+| `/blacklist add` | Mod | Index a friend code and/or user + flag them for review |
 | `/blacklist remove` | Mod | Remove an index entry |
 | `/blacklist list` | Mod | Show recent index entries (codes masked) |
-| `/whois` | Mod | A user's status, all linked codes, and index hits |
-| `/nuke` | Mod | Ban now + index every code linked to the user (caught liars) |
+| `/whois` | Mod | A user's status, all linked codes, index hits, and review flag |
+| `/nuke` | Mod | Index a user + every code linked to them; flags them for review |
+| `/suspect list` | Mod | Everyone currently flagged for review |
+| `/suspect clear` | Mod | Clear a review flag — they were innocent |
 | `/ping` | Anyone | Gateway latency, uptime, guild count |
 | `/stats` | Mod | Gate / index / report counters + last audit event |
 | `/help` | Anyone | Explains how the bot works |
@@ -77,7 +83,7 @@ tests/smoke.py    DB + command-registration tests (no token needed)
 | Table | Purpose |
 | --- | --- |
 | `settings` | Per-guild role/channel/message IDs |
-| `members` | Status per Discord account: `unverified` / `verified` / `nonau` / `banned` |
+| `members` | Status per Discord account: `unverified` / `verified` / `nonau` / `app`, plus a separate `suspect` flag for review |
 | `code_links` | friend code ↔ Discord account link history (alt detection) |
 | `blacklist` | The index: `friend_code` or `discord_id` entries with reason/evidence |
 | `reports` | Submitted reports and their review status |

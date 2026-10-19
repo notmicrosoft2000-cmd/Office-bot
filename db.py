@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS members (
     verified_at    TEXT,
     reminder_stage INTEGER NOT NULL DEFAULT 0,
     last_dm_at     TEXT,
+    suspect        INTEGER NOT NULL DEFAULT 0, -- 1 = flagged for moderator review
+    suspect_reason TEXT,
+    suspect_at     TEXT,
     last_username  TEXT
 );
 
@@ -98,6 +101,12 @@ class Database:
             )
         if "last_dm_at" not in columns:
             await self._db.execute("ALTER TABLE members ADD COLUMN last_dm_at TEXT")
+        if "suspect" not in columns:
+            await self._db.execute(
+                "ALTER TABLE members ADD COLUMN suspect INTEGER NOT NULL DEFAULT 0"
+            )
+            await self._db.execute("ALTER TABLE members ADD COLUMN suspect_reason TEXT")
+            await self._db.execute("ALTER TABLE members ADD COLUMN suspect_at TEXT")
 
     async def close(self) -> None:
         if self._db is not None:
@@ -211,6 +220,37 @@ class Database:
         )
         row = await cur.fetchone()
         return row["last_dm_at"] if row else None
+
+    # -- suspicion ----------------------------------------------------------
+    # Deliberately separate from `status`: an account can be verified *and*
+    # under review at the same time, and flagging must never change what the
+    # gate does to them.
+    async def mark_suspect(self, discord_id: int, reason: str, username: str | None = None) -> None:
+        """Flag an account for moderator review. Never bans or removes anyone."""
+        await self.db.execute(
+            "INSERT OR IGNORE INTO members(discord_id, username) VALUES(?,?)",
+            (discord_id, username or str(discord_id)),
+        )
+        await self.db.execute(
+            "UPDATE members SET suspect=1, suspect_reason=?, suspect_at=datetime('now') "
+            "WHERE discord_id=?",
+            (reason, discord_id),
+        )
+        await self.db.commit()
+
+    async def clear_suspect(self, discord_id: int) -> None:
+        await self.db.execute(
+            "UPDATE members SET suspect=0, suspect_reason=NULL, suspect_at=NULL "
+            "WHERE discord_id=?",
+            (discord_id,),
+        )
+        await self.db.commit()
+
+    async def suspect_list(self) -> list[dict[str, Any]]:
+        cur = await self.db.execute(
+            "SELECT * FROM members WHERE suspect=1 ORDER BY suspect_at DESC, discord_id"
+        )
+        return [dict(r) for r in await cur.fetchall()]
 
     async def reminder_stage(self, discord_id: int) -> int:
         cur = await self.db.execute(
@@ -416,6 +456,7 @@ class Database:
             "reports_approved": "SELECT COUNT(*) AS n FROM reports WHERE status='approved'",
             "reports_rejected": "SELECT COUNT(*) AS n FROM reports WHERE status='rejected'",
             "audit_entries": "SELECT COUNT(*) AS n FROM audit_log",
+            "suspects": "SELECT COUNT(*) AS n FROM members WHERE suspect=1",
         }
         for key, sql in counters.items():
             cur = await self.db.execute(sql)

@@ -70,12 +70,18 @@
                 <li><strong>Join gate</strong> — new members get an <code>AU Unverified</code> role and can only see the verify channel until they pass. Bots and community apps (usernames like <code>Name#1234</code>) are left alone.</li>
                 <li><strong>Friend-code capture</strong> — a code is checked for the right format, normalised, and stored, linked to the account that sent it.</li>
                 <li><strong>Moderator-approved index</strong> — a list of friend codes and Discord IDs tied to reported misconduct. Only reports a moderator approves are added.</li>
-                <li><strong>Ban-evasion detection</strong> — if a code is indexed, <em>every</em> Discord account ever linked to it is banned on sight.</li>
+                <li><strong>Alt-network detection</strong> — if a code is indexed, <em>every</em> Discord account ever linked to it is flagged for review, so moderators can see the whole network.</li>
                 <li><strong>Opt-out</strong> — members who genuinely don't play Among Us can say so instead of verifying.</li>
                 <li><strong>Reminder DMs</strong> — a friendly nudge at the start, halfway, and one more at the end, then periodically after that. Nobody is removed for taking their time.</li>
                 <li><strong>Self-monitoring</strong> — the bot writes a heartbeat every minute, and an external watchdog alerts moderators if it dies or its event loop stops responding.</li>
               </ul>
             </fieldset>
+
+            <div class="note">
+              <p><strong>Nothing is ever banned automatically.</strong> Office Bot does not ban,
+              kick, or remove anyone. An account that matches the index is warned, flagged for
+              review, and handed to a moderator — a person decides what happens next.</p>
+            </div>
 
             <div class="note">
               <p><strong>Not affiliated.</strong> Office Bot is a community-run tool. It is not
@@ -88,7 +94,7 @@
             <ol>
               <li>You join the server and receive the <code>AU Unverified</code> role. While unverified, the verify channel is the only place you can see.</li>
               <li>You press the button (or run <code>/verify</code>) and submit your Among Us friend code — it looks like <code>Name#1234</code>.</li>
-              <li>The code is checked against the index. A hit means an immediate ban, and any other account linked to that code is banned too.</li>
+              <li>The code is checked against the index. A hit doesn't remove you — it flags the account for moderator review, with a note pointing at the index entry. Any other account linked to that code is flagged too.</li>
               <li>No hit? You're verified, the role is swapped, and the rest of the server opens up.</li>
               <li>Rather not play? Choose <em>“I don't play Among Us”</em> and you're let through as a non-player.</li>
             </ol>
@@ -108,7 +114,7 @@
               evasion. You then describe what happened and can attach evidence. Reports go
               to a private moderator queue and
               <strong>only reach the index once a moderator approves them</strong> — so a
-              single player can't get someone banned on their own.
+              single player can't get someone flagged on their own.
             </p>
             <div class="note">
               <p><strong>Don't submit someone else's friend code.</strong> Framing another player
@@ -132,11 +138,13 @@
                   <tr><td><code>/report</code></td><td>Anyone</td><td>Report a friend code (<code>Example#0000</code>) with a reason.</td></tr>
                   <tr><td><code>/help</code></td><td>Anyone</td><td>Explain how the bot works.</td></tr>
                   <tr><td><code>/codes</code></td><td>Moderator</td><td>View every saved code and its linked accounts (CSV export available).</td></tr>
-                  <tr><td><code>/whois</code></td><td>Moderator</td><td>A member's status, linked codes, and any index hits.</td></tr>
-                  <tr><td><code>/blacklist add</code></td><td>Moderator</td><td>Index a code and/or member and ban them if they're present.</td></tr>
+                  <tr><td><code>/whois</code></td><td>Moderator</td><td>A member's status, linked codes, index hits, and review flag.</td></tr>
+                  <tr><td><code>/blacklist add</code></td><td>Moderator</td><td>Index a code and/or member and flag them for review.</td></tr>
                   <tr><td><code>/blacklist remove</code></td><td>Moderator</td><td>Remove an index entry.</td></tr>
                   <tr><td><code>/blacklist list</code></td><td>Moderator</td><td>Show recent index entries (codes masked).</td></tr>
-                  <tr><td><code>/nuke</code></td><td>Moderator</td><td>Ban now and index every code linked to a member.</td></tr>
+                  <tr><td><code>/nuke</code></td><td>Moderator</td><td>Index a member and every code linked to them; flags them for review.</td></tr>
+                  <tr><td><code>/suspect list</code></td><td>Moderator</td><td>Everyone currently flagged for review.</td></tr>
+                  <tr><td><code>/suspect clear</code></td><td>Moderator</td><td>Clear a review flag.</td></tr>
                   <tr><td><code>/ping</code></td><td>Anyone</td><td>Gateway latency and uptime.</td></tr>
                   <tr><td><code>/stats</code></td><td>Moderator</td><td>Gate, index, and report counters plus the last audit event.</td></tr>
                   <tr><td><code>/setup</code></td><td>Admin</td><td>Interactive menu to set channels, roles, and options.</td></tr>

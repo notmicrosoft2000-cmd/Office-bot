@@ -114,6 +114,7 @@ class Info(commands.Cog):
                 f"Unverified: **{s['members_unverified']}**\n"
                 f"Non-players: **{s['members_nonau']}**\n"
                 f"Apps (skipped): **{s.get('members_app', 0)}**\n"
+                f"Under review: **{s.get('suspects', 0)}**\n"
                 f"Tracked: **{s['members_total']}**"
             ),
             inline=True,

@@ -89,6 +89,24 @@ async def db_tests() -> None:
     await db.record_join(3, "carol")
     check("rejoin clears last_dm", await db.last_dm(3) is None)
     check("rejoin resets the stage", await db.reminder_stage(3) == 0)
+
+    # suspicion flags — the bot's only response to a bad actor
+    check("suspect starts off", not (await db.get_member(3))["suspect"])
+    await db.mark_suspect(3, "index match", "carol")
+    m = await db.get_member(3)
+    check("suspect flag set", m["suspect"] == 1)
+    check("suspect reason saved", m["suspect_reason"] == "index match")
+    check("suspect_at stamped", bool(m["suspect_at"]))
+    check("suspect never changes gate status", m["status"] == "unverified")
+    check("suspect_list includes them", [r["discord_id"] for r in await db.suspect_list()] == [3])
+    check("stats counts suspects", (await db.stats())["suspects"] == 1)
+    await db.clear_suspect(3)
+    m = await db.get_member(3)
+    check("clear_suspect resets flag", m["suspect"] == 0 and m["suspect_reason"] is None)
+    check("clear_suspect clears time", m["suspect_at"] is None)
+    check("suspect_list empty after clear", await db.suspect_list() == [])
+    await db.mark_suspect(99_999, "flag before they joined")
+    check("mark_suspect creates a missing row", (await db.get_member(99_999))["suspect"] == 1)
     await db.ensure_member(3, "carol-renamed")
     check("ensure_member doesn't clobber existing", (await db.get_member(3))["username"] == "carol")
     check("saved_codes_count", await db.saved_codes_count() == 1)
@@ -147,6 +165,11 @@ async def migration_tests() -> None:
     cols = {row["name"] for row in await cur.fetchall()}
     check("migration adds reminder_stage", "reminder_stage" in cols)
     check("migration adds last_dm_at", "last_dm_at" in cols)
+    check("migration adds suspect", "suspect" in cols)
+    check("migration adds suspect_reason", "suspect_reason" in cols)
+    check("migration adds suspect_at", "suspect_at" in cols)
+    await db.mark_suspect(1, "old row flagged")
+    check("suspect works on a migrated row", (await db.get_member(1))["suspect"] == 1)
     await db.set_status(1, "app", username="SomeApp#0001")
     check("app status persists", (await db.get_member(1))["status"] == "app")
     await db.close()
@@ -191,11 +214,31 @@ async def cog_tests() -> None:
         "whois",
         "nuke",
         "blacklist",
+        "suspect",
+        "suspect list",
+        "suspect clear",
         "help",
         "ping",
         "stats",
     ):
         check(f"command registered: {expected}", expected in names)
+
+    # The whole point of this change: nothing in the bot may call .ban(.
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    offenders = []
+    for root, _dirs, files in os.walk(here):
+        if ".venv" in root or "__pycache__" in root or "tests" in root:
+            continue
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(root, name)
+            with open(path, encoding="utf-8") as fh:
+                if ".ban(" in fh.read():
+                    offenders.append(os.path.relpath(path, here))
+    check("no .ban( calls anywhere in the bot", not offenders)
+    if offenders:
+        print(f"       found in: {', '.join(offenders)}")
 
     for ext in loaded:
         await bot.unload_extension(ext)

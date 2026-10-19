@@ -15,7 +15,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from helpers import get_bool_setting, get_roles, is_app_account, load_config, send_audit
+from helpers import (
+    flag_suspect,
+    get_bool_setting,
+    get_roles,
+    is_app_account,
+    load_config,
+    send_audit,
+)
 
 log = logging.getLogger("aubot.gate")
 
@@ -62,29 +69,25 @@ class VerifyModal(discord.ui.Modal, title="Among Us verification"):
         cfg = await load_config(self.bot, interaction.guild)
         roles = get_roles(interaction.guild, cfg)
 
-        # Someone who claimed "I don't play AU" showing up with a code is the
-        # lie we were promised we'd get to punish.
+        # Someone who claimed "I don't play AU" showing up with a code. Nobody is
+        # banned for it: they're verified normally and the lie is flagged instead.
         prior = await db.get_member(interaction.user.id)
-        if prior and prior["status"] == "nonau":
-            if self.bot.settings.lie_punishment == "ban":
-                await interaction.response.send_message(
-                    "You stated you do not play Among Us, yet you just submitted a "
-                    "friend code. You are being removed from the server.",
-                    ephemeral=True,
-                )
-                await self._audit("LIAR", f"{interaction.user} claimed non-AU then verified")
-                try:
-                    await interaction.user.ban(
-                        reason="Falsified 'I don't play Among Us' gate choice",
-                        delete_message_seconds=0,
-                    )
-                except discord.HTTPException as exc:
-                    log.warning("Liar-ban failed for %s: %s", interaction.user, exc)
-                return
-            if self.bot.settings.lie_punishment == "flag":
-                await self._respond_verified(interaction, code, roles, flagged=True)
-                return
-            # 'off': fall through and just verify them normally.
+        if prior and prior["status"] == "nonau" and self.bot.settings.lie_punishment != "off":
+            await flag_suspect(
+                self.bot,
+                interaction.user,
+                "said they don't play Among Us, then submitted a friend code",
+                guild=interaction.guild,
+                detail=f"Friend code submitted: `{code}`",
+                dm=self.bot.settings.lie_punishment == "warn",
+            )
+            await db.link_code(code, interaction.user.id)
+            await db.set_status(
+                interaction.user.id, "verified",
+                username=str(interaction.user), friend_code=code,
+            )
+            await self._respond_verified(interaction, code, roles, flagged=True)
+            return
 
         # Index lookups: the code itself, this Discord account, and any other
         # Discord accounts previously linked to the same code (alt detection).
@@ -100,21 +103,22 @@ class VerifyModal(discord.ui.Modal, title="Among Us verification"):
                     break
 
         if hit:
-            await interaction.response.send_message(
-                "You cannot be verified in this server.", ephemeral=True
+            # Not a ban. They're verified like anyone else, and moderators get
+            # an alert plus a flag they can act on (or clear) themselves.
+            await flag_suspect(
+                self.bot,
+                interaction.user,
+                "friend code or Discord account is on the index",
+                guild=interaction.guild,
+                detail=f"Matched `{hit['kind']}` `{hit['value']}` — {hit['reason']}",
+                index_id=hit["id"],
             )
-            await self._audit(
-                "AUTO-BAN",
-                f"{interaction.user} blocked at verification — index match "
-                f"#{hit['id']} ({hit['kind']}: {hit['value']})",
+            await db.link_code(code, interaction.user.id)
+            await db.set_status(
+                interaction.user.id, "verified",
+                username=str(interaction.user), friend_code=code,
             )
-            try:
-                await interaction.user.ban(
-                    reason=f"Blacklisted friend code (index #{hit['id']})",
-                    delete_message_seconds=0,
-                )
-            except discord.HTTPException as exc:
-                log.warning("Auto-ban failed for %s: %s", interaction.user, exc)
+            await self._respond_verified(interaction, code, roles, flagged=True)
             return
 
         await db.link_code(code, interaction.user.id)
@@ -130,15 +134,21 @@ class VerifyModal(discord.ui.Modal, title="Among Us verification"):
         code: str,
         roles: dict[str, discord.Role | None],
         *,
-        flagged: bool,
+        flagged: bool = False,
     ) -> None:
-        await interaction.response.send_message(
-            "✅ Verified! Your friend code is linked to this account. "
-            "Welcome aboard.",
-            ephemeral=True,
-        )
+        if flagged:
+            text = (
+                "✅ Verified — but your account or friend code is **flagged for moderator "
+                "review**. Nothing has been removed; a moderator will look into it."
+            )
+        else:
+            text = (
+                "✅ Verified! Your friend code is linked to this account. "
+                "Welcome aboard."
+            )
+        await interaction.response.send_message(text, ephemeral=True)
         await self._swap_roles(interaction, roles, "verified")
-        note = " (flagged: lied about not playing AU)" if flagged else ""
+        note = " (flagged for review)" if flagged else ""
         await self._audit("VERIFY", f"{interaction.user} verified{note}")
 
     async def _swap_roles(
@@ -295,24 +305,17 @@ class Gate(commands.Cog):
                 if hit:
                     break
         if hit:
-            await send_audit(
+            # Nothing is banned. Moderators get an alert and the account is
+            # flagged for review, but the member still goes through the normal
+            # gate — a human decides what to do about them.
+            await flag_suspect(
                 self.bot,
-                discord.Embed(
-                    title="AUTO-BAN (join)",
-                    description=f"{member} ({member.id}) matched index #{hit['id']} "
-                    f"on join and was banned.",
-                    color=discord.Color.red(),
-                ),
+                member,
+                "account or linked friend code is on the index",
+                guild=member.guild,
+                detail=f"Matched `{hit['kind']}` `{hit['value']}` — {hit['reason']}",
+                index_id=hit["id"],
             )
-            await db.audit("AUTO-BAN", f"{member} banned on join — index #{hit['id']}")
-            try:
-                await member.ban(
-                    reason=f"Blacklisted on join (index #{hit['id']})",
-                    delete_message_seconds=0,
-                )
-            except discord.HTTPException as exc:
-                log.warning("Join-ban failed for %s: %s", member, exc)
-            return
 
         cfg = await load_config(self.bot, member.guild)
         role_id = cfg.get("role_unverified")

@@ -25,12 +25,12 @@ class Help(commands.Cog):
         )
         embed.add_field(
             name="2) What happens when they verify",
-            value="Verified players get the `AU Verified` role (this is optional — admins can turn it off so they simply lose `AU Unverified`). `I don't play AU` members get `AU Non-Player`. Submitting a valid friend code records it and links it to their Discord account. If that code (or the account) is on the index, they're **banned on-the-spot**. If someone claimed 'I don't play AU' and later submits a code, the bot bans/flags them per `LIE_PUNISHMENT`.",
+            value="Verified players get the `AU Verified` role (this is optional — admins can turn it off so they simply lose `AU Unverified`). `I don't play AU` members get `AU Non-Player`. Submitting a valid friend code records it and links it to their Discord account. If that code (or the account) is on the index, they are **verified but flagged for moderator review** — the bot never bans anyone. If someone claimed 'I don't play AU' and later submits a code, the lie is flagged the same way (`LIE_PUNISHMENT`, default `warn`).",
             inline=False,
         )
         embed.add_field(
             name="3) Alt detection",
-            value="Every friend code is linked to every Discord account that has used it. If any code is indexed, **all linked accounts** are banned (so ban evasion gets caught at join/verify).",
+            value="Every friend code is linked to every Discord account that has used it. If any code is indexed, **all linked accounts** are flagged for review at join/verify, so moderators can see the alt network and act on it.",
             inline=False,
         )
         embed.add_field(
@@ -40,7 +40,7 @@ class Help(commands.Cog):
         )
         embed.add_field(
             name="5) Moderation tools",
-            value="Mods can use `/blacklist add/remove/list`, `/whois`, `/nuke` (ban now + index all linked codes), and `/codes` to **view every saved friend code** (with linked accounts) or export a CSV. Approving a report also bans anyone currently linked to it.",
+            value="Mods can use `/blacklist add/remove/list`, `/whois`, `/nuke` (index a user and every code linked to them), `/suspect list` + `/suspect clear` to review flags, and `/codes` to **view every saved friend code** (with linked accounts) or export a CSV. **Nothing is ever banned automatically** — approving a report indexes the code and flags everyone linked to it, and a moderator decides what happens next.",
             inline=False,
         )
         embed.add_field(

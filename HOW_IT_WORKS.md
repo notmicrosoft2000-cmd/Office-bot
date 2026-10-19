@@ -5,10 +5,10 @@ The bot prevents known bad Among Us players from slipping back in. It uses **fri
 ## Core ideas
 
 - **Join gate**: New members only see `#verify` and must pick one of two options (submit a friend code, or say "I don't play Among Us"). **Nothing is kicked for timing out** — the bot nudges them by DM (welcome, halfway, final, then every `REMINDER_REPEAT_HOURS`, default 12h) until they act or leave. On join they also get a **brief @ping in the gate channel** (that ping message is deleted right after so the channel stays clean). **Bots and `Name#1234` app accounts are skipped entirely** — they have nothing to verify.
-- **Index (blacklist)**: A shared list of `friend_code` and/or `discord_id`. If anyone on that list joins or tries to verify, they're **banned immediately**.
-- **Alt detection**: Every time someone verifies with a friend code, the bot links that code → that Discord account. If that code ever gets indexed, **every Discord account that ever used that code** is also banned. This catches alt accounts.
+- **Index (blacklist)**: A shared list of `friend_code` and/or `discord_id`. If anyone on that list joins or tries to verify, they are **flagged for moderator review** — warned by DM, announced in `#mod-logs`, and shown in `/suspect list`. **Nothing is ever banned automatically.**
+- **Alt detection**: Every time someone verifies with a friend code, the bot links that code → that Discord account. If that code ever gets indexed, **every Discord account that ever used that code** is flagged too. This makes alt accounts visible to mods.
 - **Verified role is optional**: On success the bot normally gives `AU Verified` and removes `AU Unverified`. Admins can turn the role grant off so verified members just lose the unverified role. `I don't play AU` members get `AU Non-Player`.
-- **Anti-lie**: If someone clicks "I don't play Among Us" but later submits a friend code, the bot can **ban** them (default), **flag** them for mods, or ignore it (configurable).
+- **Anti-lie**: If someone clicks "I don't play Among Us" but later submits a friend code, the bot **flags them for review** (default, and it DMs them), **flags them quietly**, or ignores it — configurable with `LIE_PUNISHMENT` (`warn` / `flag` / `off`). It never bans.
 - **Mod approval for reports**: `/report` lets anyone report an Among Us **friend code** (with a reason such as predatory behaviour). Reports go to a private mod queue with **Approve → blacklist** / **Reject**. **Only approved reports enter the index**. This stops people from maliciously framing others.
 - **Persistence**: All links, reports, and the index live in `data/au_verify.db` on the server. Pending reports survive restarts.
 
@@ -65,20 +65,20 @@ Running it does these things in order:
 2. Clicks "I play Among Us" → types friend code → bot checks index. If clean, links code to them, gives `AU Verified`, removes Unverified. They can now see channels (if hard gate is on).
 
 **A known bad actor (indexed) tries to join:**
-1. Joins → bot checks their Discord ID against index. If matched, **bans them instantly**. No gate shown.
+1. Joins → bot checks their Discord ID against the index. If matched, they are **flagged for review**: they get a DM warning, `#mod-logs` gets a `⚠️ SUSPICION` embed with the index entry, and `/suspect list` shows them. **Nothing is banned** — the gate runs normally and a moderator decides.
 
-**A banned person makes an alt and tries with the same friend code:**
+**Someone indexed makes an alt and tries with the same friend code:**
 1. New Discord account joins → gets to gate.
-2. Submits the indexed friend code → index hit → **banned immediately**. Also, if the code was linked to others, the system already would have caught them on join/verify.
+2. Submits the indexed friend code → index hit → **flagged for review**, with a pointer to the index entry. Because codes are linked to every account that ever used them, the whole alt network shows up in `/whois` and `/suspect list`.
 
 **Someone reports a bad actor:**
 1. Runs `/report` with the **friend code** (`Example#0000`) and a **reason** (predatory behaviour, harassment, ban evasion, …), then describes what happened and can attach evidence.
-2. Mod sees it in `#mod-reports` → clicks **Approve → blacklist**. That adds the code to the index, **bans everyone currently linked to it**, and logs to `#mod-logs`.
+2. Mod sees it in `#mod-reports` → clicks **Approve → blacklist**. That adds the code to the index, **flags everyone currently linked to it** (warned by DM, announced in `#mod-logs`), and logs to `#mod-logs`.
 3. Clicking **Reject** just closes it out.
 
 **Someone lies about not playing:**
 1. Clicks "I don't play Among Us" → passes gate as `AU Non-Player`.
-2. Later submits a friend code via `/verify` → bot sees they previously claimed non-AU. With default `LIE_PUNISHMENT=ban`, it **bans them on the spot** and logs it.
+2. Later submits a friend code via `/verify` → bot sees they previously claimed non-AU. With the default `LIE_PUNISHMENT=warn` they are **verified anyway, DM'd, and flagged for review**; `flag` does the same but skips the DM; `off` ignores it.
 
 ## Limitations (be honest about these)
 

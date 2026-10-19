@@ -13,7 +13,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from helpers import is_mod, load_config, send_audit
+from helpers import flag_suspect, is_mod, load_config, send_audit
 
 log = logging.getLogger("aubot.reports")
 
@@ -189,19 +189,24 @@ class ReportReviewView(discord.ui.View):
             interaction.user.id,
         )
 
-        banned = await self._ban_linked(interaction.guild, report, entries)
+        flagged = await self._flag_linked(interaction.guild, entries)
         await self._edit_message(interaction, approved=True, reviewer=interaction.user)
         await send_audit(
             self.bot,
             discord.Embed(
                 title="REPORT APPROVED",
                 description=f"Report `#{self.report_id}` approved by {interaction.user}.\n"
-                f"Banned now: {banned or 'none (they may rejoin later — they are indexed)'}",
-                color=discord.Color.red(),
+                f"Indexed. Flagged for review: "
+                f"{', '.join(flagged) or 'nobody currently in the server'}\n"
+                f"**Nothing was banned** — automated bans are off. A moderator decides "
+                f"what to do next.",
+                color=discord.Color.gold(),
             ),
         )
         await interaction.followup.send(
-            f"Report #{self.report_id} approved. Banned: {banned or 'not currently in the server'}.",
+            f"Report #{self.report_id} approved and indexed. Flagged for review: "
+            f"{', '.join(flagged) or 'nobody is currently in the server'}. "
+            f"Nothing was banned.",
             ephemeral=True,
         )
 
@@ -223,37 +228,37 @@ class ReportReviewView(discord.ui.View):
             f"Report #{self.report_id} rejected.", ephemeral=True
         )
 
-    async def _ban_linked(
+    async def _flag_linked(
         self,
         guild: discord.Guild | None,
-        report: dict,
         entries: list[tuple[str, str]],
     ) -> list[str]:
-        """Ban everyone currently in the server connected to the new index entries."""
+        """Flag everyone in the server connected to the new index entries.
+
+        Approving a report used to ban them on the spot. It no longer bans
+        anything — the accounts are flagged and warned, and a moderator acts.
+        """
         if guild is None:
             return []
-        banned: list[str] = []
-        ids_to_ban: set[int] = {
-            int(v) for k, v in entries if k == "discord_id"
-        }
+        flagged: list[str] = []
+        ids: set[int] = {int(v) for k, v in entries if k == "discord_id"}
         for kind, value in entries:
             if kind == "friend_code":
-                ids_to_ban.update(await self.bot.db.members_with_code(value))
-                ids_to_ban.update(await self.bot.db.discord_ids_for_code(value))
-        for uid in ids_to_ban:
+                ids.update(await self.bot.db.members_with_code(value))
+                ids.update(await self.bot.db.discord_ids_for_code(value))
+        for uid in ids:
             try:
                 member = guild.get_member(uid) or await guild.fetch_member(uid)
             except discord.HTTPException:
                 continue
-            try:
-                await member.ban(
-                    reason=f"Blacklisted via report #{report['id']}",
-                    delete_message_seconds=0,
-                )
-                banned.append(str(member))
-            except discord.HTTPException:
-                continue
-        return banned
+            await flag_suspect(
+                self.bot,
+                member,
+                f"friend code indexed via report #{self.report_id}",
+                guild=guild,
+            )
+            flagged.append(str(member))
+        return flagged
 
     async def _edit_message(
         self, interaction: discord.Interaction, *, approved: bool, reviewer: discord.User

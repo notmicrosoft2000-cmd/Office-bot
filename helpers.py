@@ -78,6 +78,55 @@ def is_mod(member: discord.abc.Member) -> bool:
     return bool(perms.administrator or perms.manage_guild or perms.ban_members)
 
 
+async def flag_suspect(
+    bot,
+    member: discord.abc.User,
+    reason: str,
+    *,
+    guild: discord.Guild | None = None,
+    detail: str | None = None,
+    index_id: int | None = None,
+    dm: bool = True,
+) -> None:
+    """Flag an account for moderator review and tell everyone involved.
+
+    This is the bot's *only* answer to a bad actor. It never bans, kicks or
+    removes anyone: a wrong index entry would be irreversible for whoever it
+    hit, so the bot warns, records and alerts, and a human moderator decides.
+    """
+    await bot.db.mark_suspect(member.id, reason, str(member))
+    await bot.db.audit("SUSPECT", f"{member} flagged — {reason}")
+
+    where = f" in **{guild.name}**" if guild is not None else ""
+    if dm:
+        try:
+            await member.send(
+                f"⚠️ Your account{where} has been flagged for review by the moderators.\n"
+                f"Reason: **{reason}**\n\n"
+                "Nothing has been removed — a moderator is looking into it. If you think "
+                "this is a mistake, say so in the server and a moderator will check."
+            )
+        except discord.HTTPException:
+            pass
+
+    lines = [f"{member} ({member.id}) was flagged: **{reason}**"]
+    if index_id is not None:
+        lines.append(f"Index entry: `#{index_id}`")
+    if detail:
+        lines.append(detail)
+    lines.append(
+        "\n**Nothing was banned** — automated bans are off. A moderator decides what to do."
+    )
+    await send_audit(
+        bot,
+        discord.Embed(
+            title="⚠️ SUSPICION",
+            description="\n".join(lines),
+            color=discord.Color.gold(),
+        ),
+    )
+
+
 async def get_bool_setting(bot, key: str, default: bool) -> bool:
     raw = await bot.db.get_setting(key)
     if raw is None:

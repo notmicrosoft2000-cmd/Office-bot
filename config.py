@@ -29,9 +29,10 @@ class Settings:
     fc_pattern: str
     log_level: str
     # What to do when someone who clicked "I don't play Among Us" submits a code:
-    #   ban  -> remove them from the server (default)
-    #   flag -> let them verify, but mark it loudly for moderators
+    #   warn -> verify them, flag for review, and DM them about it (default)
+    #   flag -> the same, but only moderators are told
     #   off  -> just verify them normally
+    # There is no "ban" option and never will be: nothing in this bot bans.
     lie_punishment: str
 
     @property
@@ -54,9 +55,11 @@ def load_settings() -> Settings:
         raise SystemExit(
             "DISCORD_TOKEN is not set. Copy .env.example to .env and fill it in."
         )
-    lie = (os.getenv("LIE_PUNISHMENT", "ban").strip().lower() or "ban")
-    if lie not in {"ban", "flag", "off"}:
-        lie = "ban"
+    lie = (os.getenv("LIE_PUNISHMENT", "warn").strip().lower() or "warn")
+    if lie == "ban":  # historical value — automated bans were removed
+        lie = "warn"
+    if lie not in {"warn", "flag", "off"}:
+        lie = "warn"
     return Settings(
         token=token,
         guild_id=_int_or_none(os.getenv("GUILD_ID", "").strip()),

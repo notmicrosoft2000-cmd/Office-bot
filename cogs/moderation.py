@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from helpers import is_mod, mask_code, send_audit
+from helpers import flag_suspect, is_mod, mask_code, send_audit
 
 
 async def _mod_ok(interaction: discord.Interaction) -> bool:
@@ -66,9 +66,9 @@ class Moderation(commands.Cog):
             )
             added.append(f"user {user} → index #{entry_id}")
 
-        # Ban them right now if they're in this server, plus any account
-        # sharing the indexed friend code (alt detection).
-        banned: list[str] = []
+        # Flag everyone connected to what was just indexed. Nothing is banned:
+        # the index means "watch this account", not "remove on sight".
+        flagged: list[str] = []
         guild = interaction.guild
         if guild:
             ids = {user.id} if user else set()
@@ -81,11 +81,10 @@ class Moderation(commands.Cog):
                     member = guild.get_member(uid) or await guild.fetch_member(uid)
                 except discord.HTTPException:
                     continue
-                try:
-                    await member.ban(reason=f"Blacklisted: {reason}", delete_message_seconds=0)
-                    banned.append(str(member))
-                except discord.HTTPException:
-                    continue
+                await flag_suspect(
+                    self.bot, member, f"indexed: {reason}", guild=guild, dm=False
+                )
+                flagged.append(str(member))
 
         await self.bot.db.audit(
             "BLACKLIST", f"{interaction.user} indexed: {'; '.join(added)} | {reason}",
@@ -97,14 +96,19 @@ class Moderation(commands.Cog):
                 title="INDEX UPDATED",
                 description=f"{interaction.user} added:\n" + "\n".join(f"• {a}" for a in added)
                 + f"\nReason: {reason}"
-                + (f"\nBanned now: {', '.join(banned)}" if banned else ""),
-                color=discord.Color.red(),
+                + (f"\nFlagged for review: {', '.join(flagged)}" if flagged else "")
+                + "\n**Nothing was banned** — automated bans are off.",
+                color=discord.Color.gold(),
             ),
         )
         await interaction.response.send_message(
             "Added:\n" + "\n".join(f"• {a}" for a in added)
-            + (f"\nBanned now: {', '.join(banned)}" if banned else "\n(They weren't in the server — "
-               "they'll be banned on join.)"),
+            + (
+                f"\nFlagged for review: {', '.join(flagged)}"
+                if flagged
+                else "\n(No matching accounts are in the server right now — "
+                     "they'll be flagged automatically when they join.)"
+            ),
             ephemeral=True,
         )
 
@@ -194,7 +198,73 @@ class Moderation(commands.Cog):
                 inline=False,
             )
             embed.colour = discord.Color.red()
+        if member and member.get("suspect"):
+            embed.add_field(
+                name="👁️ UNDER REVIEW",
+                value=(
+                    f"{member['suspect_reason'] or 'flagged'}"
+                    f"\nFlagged {member['suspect_at'] or '?'} (UTC). "
+                    f"Clear it with `/suspect clear`."
+                ),
+                inline=False,
+            )
+            if embed.colour is None:
+                embed.colour = discord.Color.gold()
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    suspect = app_commands.Group(
+        name="suspect", description="Accounts flagged for review (nothing is ever banned)"
+    )
+
+    @suspect.command(name="list", description="Accounts currently flagged for review")
+    @app_commands.default_permissions(ban_members=True)
+    async def suspect_list(self, interaction: discord.Interaction) -> None:
+        if not await _mod_ok(interaction):
+            return
+        rows = await self.bot.db.suspect_list()
+        embed = discord.Embed(
+            title="👁️ Under review",
+            description=(
+                "\n".join(
+                    f"**{r['username']}** (`{r['discord_id']}`) — {r['suspect_reason'] or '?'}"
+                    f"\n↳ flagged {r['suspect_at'] or '?'} UTC · status: {r['status']}"
+                    for r in rows[:25]
+                )
+                or "Nothing is flagged."
+            ),
+            color=discord.Color.gold(),
+        )
+        if len(rows) > 25:
+            embed.set_footer(text=f"+{len(rows) - 25} more")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @suspect.command(name="clear", description="Clear a review flag — they were innocent")
+    @app_commands.default_permissions(ban_members=True)
+    @app_commands.describe(user="The account to clear")
+    async def suspect_clear(self, interaction: discord.Interaction, user: discord.User) -> None:
+        if not await _mod_ok(interaction):
+            return
+        member = await self.bot.db.get_member(user.id)
+        if not member or not member.get("suspect"):
+            await interaction.response.send_message(
+                f"{user} isn't flagged for review.", ephemeral=True
+            )
+            return
+        await self.bot.db.clear_suspect(user.id)
+        await self.bot.db.audit(
+            "SUSPECT-CLEAR", f"{interaction.user} cleared the flag on {user}", interaction.user.id
+        )
+        await send_audit(
+            self.bot,
+            discord.Embed(
+                title="FLAG CLEARED",
+                description=f"{interaction.user} cleared the review flag on {user} ({user.id}).",
+                color=discord.Color.green(),
+            ),
+        )
+        await interaction.response.send_message(
+            f"Cleared — {user} is no longer flagged for review.", ephemeral=True
+        )
 
     @app_commands.command(
         name="codes",
@@ -266,10 +336,10 @@ class Moderation(commands.Cog):
 
     @app_commands.command(
         name="nuke",
-        description="Ban a user NOW and index their linked friend codes (e.g. caught lying)",
+        description="Index a user and every friend code linked to them (flags for review, never bans)",
     )
     @app_commands.default_permissions(ban_members=True)
-    @app_commands.describe(user="The offender", reason="Shown in the ban log")
+    @app_commands.describe(user="The offender", reason="Shown in the log")
     async def nuke(self, interaction: discord.Interaction, user: discord.User, reason: str) -> None:
         if not await _mod_ok(interaction):
             return
@@ -280,14 +350,14 @@ class Moderation(commands.Cog):
             codes.append(member_rec["friend_code"])
         codes = list(dict.fromkeys(codes))
 
-        banned = False
+        flagged = False
         if guild:
             try:
                 member = guild.get_member(user.id) or await guild.fetch_member(user.id)
-                await member.ban(reason=reason, delete_message_seconds=0)
-                banned = True
+                await flag_suspect(self.bot, member, f"indexed: {reason}", guild=guild)
+                flagged = True
             except (discord.HTTPException, AttributeError):
-                banned = False
+                flagged = False
 
         indexed: list[str] = []
         await self.bot.db.blacklist_add("discord_id", str(user.id), reason, interaction.user.id)
@@ -295,24 +365,26 @@ class Moderation(commands.Cog):
         for code in codes:
             await self.bot.db.blacklist_add("friend_code", code, reason, interaction.user.id)
             indexed.append(mask_code(code))
-        await self.bot.db.set_status(user.id, "banned", username=str(user))
 
         await self.bot.db.audit(
-            "NUKE", f"{interaction.user} nuked {user}: {reason}", interaction.user.id
+            "NUKE", f"{interaction.user} indexed {user}: {reason}", interaction.user.id
         )
         await send_audit(
             self.bot,
             discord.Embed(
-                title="NUKED",
-                description=f"{user} ({user.id}) banned by {interaction.user}.\n"
-                f"Reason: {reason}\nIndexed codes: "
-                + (", ".join(f"`{c}`" for c in indexed) or "none"),
-                color=discord.Color.dark_red(),
+                title="INDEXED",
+                description=f"{user} ({user.id}) indexed by {interaction.user}.\n"
+                f"Reason: {reason}\nIndexed identifiers: "
+                + (", ".join(f"`{c}`" for c in indexed) or "none")
+                + "\n**Nothing was banned** — automated bans are off. A moderator decides.",
+                color=discord.Color.gold(),
             ),
         )
         await interaction.response.send_message(
-            f"{'Banned' if banned else 'Indexed (not currently in this server)'}: {user}\n"
-            f"Indexed identifiers: {', '.join(indexed)}",
+            f"{'Flagged and indexed' if flagged else 'Indexed (not currently in this server)'}: "
+            f"{user}\n"
+            f"Indexed identifiers: {', '.join(indexed)}\n"
+            f"Nothing was banned — if you want them gone, ban them from Discord's own menu.",
             ephemeral=True,
         )
 
